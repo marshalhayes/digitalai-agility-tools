@@ -1,0 +1,239 @@
+name: Publish CLI Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-branch:
+        description: Release branch to publish from (for example, release/1.2.3 or release/1.2.3-rc.1)
+        required: true
+        type: string
+
+concurrency:
+  group: publish-release-${{ inputs.release-branch }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate CLI release inputs
+    runs-on: ubuntu-22.04
+    outputs:
+      is_prerelease: ${{ steps.release-inputs.outputs.is_prerelease }}
+      release_sha: ${{ steps.release-source.outputs.release_sha }}
+      release_tag: v${{ steps.release-inputs.outputs.release_version }}
+      release_version: ${{ steps.release-inputs.outputs.release_version }}
+    steps:
+      - name: Validate CLI release inputs
+        id: release-inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          branch='${{ inputs.release-branch }}'
+
+          if [[ "$branch" =~ ^release\/(([0-9]+\.[0-9]+\.[0-9]+)(-([0-9A-Za-z.-]+))?)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+            if [[ -n "${BASH_REMATCH[3]}" ]]; then
+              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "::error::release_branch must be formatted as release/<version>, for example release/1.2.3 or release/1.2.3-rc.1"
+            exit 1
+          fi
+
+          echo "release_version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check out release branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release-branch }}
+
+      - name: Resolve CLI release source
+        id: release-source
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build-jar:
+    name: Build CLI JAR
+    needs: validate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+
+      - name: Build CLI JAR
+        uses: ./.github/actions/build-cli
+        with:
+          release-version: ${{ needs.validate.outputs.release_version }}
+
+      - name: Resolve CLI JAR artifact path
+        id: jar
+        shell: bash
+        run: |
+          set -euo pipefail
+          final_name=$(./mvnw -q -pl cli help:evaluate -Dexpression=project.build.finalName -DforceStdout)
+          echo "path=cli/target/${final_name}.jar" >> "$GITHUB_OUTPUT"
+
+      - name: Upload CLI JAR artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: cli
+          path: ${{ steps.jar.outputs.path }}
+
+  build-native:
+    name: Build CLI native image (${{ matrix.name }})
+    needs: validate
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        include:
+          - name: linux-x64
+            runner: ubuntu-22.04
+
+          - name: linux-arm64
+            runner: ubuntu-22.04-arm
+
+          - name: linux-x64-musl
+            runner: ubuntu-22.04
+            build-args: -DbuildArgs=--static,--libc=musl
+
+          - name: windows-x64
+            runner: windows-2025
+
+          - name: macos-arm64
+            runner: macos-15
+
+          - name: macos-x64
+            runner: macos-15-intel
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+
+      - name: Install musl toolchain
+        if: matrix.name == 'linux-x64-musl'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -o musl-toolchain.tar.gz https://gds.oracle.com/download/bfs/archive/musl-toolchain-1.2.5-oracle-00001-linux-amd64.tar.gz
+          tar -xzf musl-toolchain.tar.gz
+          echo "$PWD/musl-toolchain/bin" >> "$GITHUB_PATH"
+
+      - name: Build CLI native image
+        uses: ./.github/actions/build-cli
+        with:
+          release-version: ${{ needs.validate.outputs.release_version }}
+          build-target: native
+          build-args: ${{ matrix.build-args || '' }}
+
+      - name: Upload CLI native artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-cli-${{ matrix.name }}
+          path: ${{ startsWith(matrix.name, 'windows-') && 'cli/target/cli.exe' || 'cli/target/cli' }}
+
+  publish-release:
+    name: Publish CLI release
+    needs: [validate, build-jar, build-native]
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.release_sha }}
+
+      - name: Download CLI JAR artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: cli
+          path: dist/cli
+
+      - name: Download CLI native artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist/native
+          pattern: native-cli-*
+
+      - name: Prepare CLI release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p release-assets
+
+          cp dist/cli/*.jar release-assets/cli.jar
+
+          find dist/native -mindepth 2 -maxdepth 2 -type f \( -name cli -o -name cli.exe \) | sort | while read -r artifact; do
+            artifact_dir=$(basename "$(dirname "$artifact")")
+            asset_suffix=${artifact_dir#native-cli-}
+            extension=
+
+            if [[ "$artifact" == *.exe ]]; then
+              extension=.exe
+            fi
+
+            cp "$artifact" "release-assets/cli-${asset_suffix}${extension}"
+          done
+
+          ls -1 release-assets
+
+      - name: Create or validate CLI release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch --tags origin
+
+          tag_name='${{ needs.validate.outputs.release_tag }}'
+          release_sha='${{ needs.validate.outputs.release_sha }}'
+
+          if git rev-parse "$tag_name" >/dev/null 2>&1; then
+            existing_sha=$(git rev-list -n 1 "$tag_name")
+            if [[ "$existing_sha" != "$release_sha" ]]; then
+              echo "::error::Tag $tag_name already exists but points to $existing_sha instead of $release_sha"
+              exit 1
+            fi
+
+            echo "Tag $tag_name already exists and points to the release commit."
+          else
+            git tag "$tag_name" "$release_sha"
+            git push origin "$tag_name"
+          fi
+
+      - name: Create or update CLI GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag_name='${{ needs.validate.outputs.release_tag }}'
+          prerelease_flag=''
+
+          if [[ '${{ needs.validate.outputs.is_prerelease }}' == 'true' ]]; then
+            prerelease_flag='--prerelease'
+          fi
+
+          if gh release view "$tag_name" >/dev/null 2>&1; then
+            gh release upload "$tag_name" release-assets/* --clobber
+          else
+            gh release create "$tag_name" release-assets/* \
+              --verify-tag \
+              --generate-notes \
+              --title "$tag_name" \
+              $prerelease_flag
+          fi

@@ -1,0 +1,51 @@
+name: Setup and Build CLI
+description: Set up Java and build the CLI JAR or native image.
+
+inputs:
+  release-version:
+    description: Optional release version to stamp into the Maven build.
+    required: false
+    default: ""
+  build-target:
+    description: Build target. Supported values are jar and native.
+    required: false
+    default: "jar"
+  build-args:
+    description: Optional extra Maven arguments, one per line.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK 25
+      uses: actions/setup-java@v5
+      with:
+        java-version: "25"
+        distribution: "graalvm"
+        cache: maven
+
+    - name: Set CLI release version
+      if: ${{ inputs.release-version != '' }}
+      shell: pwsh
+      run: |
+        & ./mvnw -B versions:set -DnewVersion=${{ inputs.release-version }} -DgenerateBackupPoms=false -DprocessAllModules=true
+
+    - name: Build CLI project
+      shell: pwsh
+      env:
+        BUILD_ARGS: ${{ inputs.build-args }}
+      run: |
+        $buildTarget = '${{ inputs.build-target }}'
+        $buildArgs = @($env:BUILD_ARGS -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+        if ($buildTarget -eq 'jar') {
+          & ./mvnw -B -pl cli -am @buildArgs package
+        }
+        elseif ($buildTarget -eq 'native') {
+          & ./mvnw -B -pl cli -am -Pnative @buildArgs package
+        }
+        else {
+          Write-Error "Unsupported build-target '$buildTarget'. Expected 'jar' or 'native'."
+          exit 1
+        }
