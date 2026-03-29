@@ -14,6 +14,7 @@
 
   <properties>
     <picocli.version>4.7.7</picocli.version>
+    <jsoup.version>1.19.1</jsoup.version>
   </properties>
 
   <dependencies>
@@ -21,6 +22,23 @@
       <groupId>info.picocli</groupId>
       <artifactId>picocli-spring-boot-starter</artifactId>
       <version>${picocli.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>dev.marshalhayes.digitalai.agility.tools</groupId>
+      <artifactId>client-starter</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+
+    <dependency>
+      <groupId>org.jsoup</groupId>
+      <artifactId>jsoup</artifactId>
+      <version>${jsoup.version}</version>
     </dependency>
   </dependencies>
 
@@ -32,6 +50,11 @@
 
         <configuration>
           <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </path>
+            
             <path>
               <groupId>info.picocli</groupId>
               <artifactId>picocli-codegen</artifactId>
@@ -62,6 +85,15 @@
             </goals>
           </execution>
         </executions>
+
+        <configuration>
+          <excludes>
+            <exclude>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </exclude>
+          </excludes>
+        </configuration>
       </plugin>
     </plugins>
   </build>

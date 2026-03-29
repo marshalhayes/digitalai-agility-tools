@@ -1,10 +1,10 @@
 package dev.marshalhayes.digitalai.agility.tools.cli;
 
+import dev.marshalhayes.digitalai.agility.tools.cli.stories.StoryCommands;
 import org.springframework.stereotype.Component;
-
 import picocli.CommandLine.Command;
 
 @Component
-@Command(name = "agility", mixinStandardHelpOptions = true, versionProvider = VersionProvider.class)
+@Command(name = "agility", subcommands = StoryCommands.class, mixinStandardHelpOptions = true, versionProvider = VersionProvider.class)
 public class RootCommand {
 }

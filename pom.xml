@@ -22,5 +22,16 @@
 
   <modules>
     <module>cli</module>
+    <module>client-starter</module>
   </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>dev.marshalhayes.digitalai.agility.tools</groupId>
+        <artifactId>client-starter</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 </project>

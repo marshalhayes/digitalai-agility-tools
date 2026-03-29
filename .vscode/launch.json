@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "CLI",
+      "request": "launch",
+      "mainClass": "dev.marshalhayes.digitalai.agility.tools.cli.App",
+      "projectName": "cli",
+      "args": "${input:cliArgs}"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "cliArgs",
+      "type": "promptString",
+      "description": "CLI arguments"
+    }
+  ]
+}
