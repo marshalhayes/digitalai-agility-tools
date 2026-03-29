@@ -95,6 +95,7 @@
 
             <configuration>
               <mainClass>dev.marshalhayes.digitalai.agility.tools.cli.App</mainClass>
+              <imageName>agility</imageName>
             </configuration>
           </plugin>
         </plugins>

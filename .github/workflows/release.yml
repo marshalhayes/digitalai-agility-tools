@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release-branch:
-        description: Release branch to publish from (for example, release/1.2.3 or release/1.2.3-rc.1)
+        description: Release branch to publish from (e.g. release/1.2.3 or release/1.2.3-rc.1)
         required: true
         type: string
 
@@ -18,6 +18,7 @@ permissions:
 jobs:
   validate:
     name: Validate CLI release inputs
+    timeout-minutes: 5
     runs-on: ubuntu-22.04
     outputs:
       is_prerelease: ${{ steps.release-inputs.outputs.is_prerelease }}
@@ -33,9 +34,9 @@ jobs:
 
           branch='${{ inputs.release-branch }}'
 
-          if [[ "$branch" =~ ^release\/(([0-9]+\.[0-9]+\.[0-9]+)(-([0-9A-Za-z.-]+))?)$ ]]; then
-            version="${BASH_REMATCH[1]}"
-            if [[ -n "${BASH_REMATCH[3]}" ]]; then
+          if [[ "$branch" =~ ^release/(([0-9]+\.[0-9]+\.[0-9]+)(-([0-9A-Za-z._\-]+))?)$ ]]; then
+            echo "release_version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+            if [[ -n "${BASH_REMATCH[4]}" ]]; then
               echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
             else
               echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
@@ -44,8 +45,6 @@ jobs:
             echo "::error::release_branch must be formatted as release/<version>, for example release/1.2.3 or release/1.2.3-rc.1"
             exit 1
           fi
-
-          echo "release_version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Check out release branch
         uses: actions/checkout@v6
@@ -59,94 +58,17 @@ jobs:
           set -euo pipefail
           echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-  build-jar:
-    name: Build CLI JAR
+  build-cli:
     needs: validate
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.validate.outputs.release_sha }}
-
-      - name: Build CLI JAR
-        uses: ./.github/actions/build-cli
-        with:
-          release-version: ${{ needs.validate.outputs.release_version }}
-
-      - name: Resolve CLI JAR artifact path
-        id: jar
-        shell: bash
-        run: |
-          set -euo pipefail
-          final_name=$(./mvnw -q -pl cli help:evaluate -Dexpression=project.build.finalName -DforceStdout)
-          echo "path=cli/target/${final_name}.jar" >> "$GITHUB_OUTPUT"
-
-      - name: Upload CLI JAR artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: cli
-          path: ${{ steps.jar.outputs.path }}
-
-  build-native:
-    name: Build CLI native image (${{ matrix.name }})
-    needs: validate
-
-    strategy:
-      fail-fast: false
-
-      matrix:
-        include:
-          - name: linux-x64
-            runner: ubuntu-22.04
-
-          - name: linux-arm64
-            runner: ubuntu-22.04-arm
-
-          - name: linux-x64-musl
-            runner: ubuntu-22.04
-            build-args: -DbuildArgs=--static,--libc=musl
-
-          - name: windows-x64
-            runner: windows-2025
-
-          - name: macos-arm64
-            runner: macos-15
-
-          - name: macos-x64
-            runner: macos-15-intel
-
-    runs-on: ${{ matrix.runner }}
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.validate.outputs.release_sha }}
-
-      - name: Install musl toolchain
-        if: matrix.name == 'linux-x64-musl'
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSL -o musl-toolchain.tar.gz https://gds.oracle.com/download/bfs/archive/musl-toolchain-1.2.5-oracle-00001-linux-amd64.tar.gz
-          tar -xzf musl-toolchain.tar.gz
-          echo "$PWD/musl-toolchain/bin" >> "$GITHUB_PATH"
-
-      - name: Build CLI native image
-        uses: ./.github/actions/build-cli
-        with:
-          release-version: ${{ needs.validate.outputs.release_version }}
-          build-target: native
-          build-args: ${{ matrix.build-args || '' }}
-
-      - name: Upload CLI native artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: native-cli-${{ matrix.name }}
-          path: ${{ startsWith(matrix.name, 'windows-') && 'cli/target/cli.exe' || 'cli/target/cli' }}
+    uses: ./.github/workflows/build-cli.yml
+    with:
+      ref: ${{ needs.validate.outputs.release_sha }}
+      release-version: ${{ needs.validate.outputs.release_version }}
 
   publish-release:
     name: Publish CLI release
-    needs: [validate, build-jar, build-native]
+    needs: [validate, build-cli]
+    timeout-minutes: 15
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ github.token }}
@@ -156,37 +78,38 @@ jobs:
         with:
           ref: ${{ needs.validate.outputs.release_sha }}
 
-      - name: Download CLI JAR artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: cli
-          path: dist/cli
-
       - name: Download CLI native artifacts
         uses: actions/download-artifact@v8
         with:
-          path: dist/native
-          pattern: native-cli-*
+          path: dist
+          pattern: agility-*
 
       - name: Prepare CLI release assets
         shell: bash
         run: |
           set -euo pipefail
+          shopt -s nullglob
 
           mkdir -p release-assets
 
-          cp dist/cli/*.jar release-assets/cli.jar
+          artifact_dirs=(dist/agility-*)
 
-          find dist/native -mindepth 2 -maxdepth 2 -type f \( -name cli -o -name cli.exe \) | sort | while read -r artifact; do
-            artifact_dir=$(basename "$(dirname "$artifact")")
-            asset_suffix=${artifact_dir#native-cli-}
-            extension=
+          if [[ ${#artifact_dirs[@]} -eq 0 ]]; then
+            echo "::error::No CLI artifacts were downloaded."
+            exit 1
+          fi
 
-            if [[ "$artifact" == *.exe ]]; then
-              extension=.exe
+          for artifact_dir in "${artifact_dirs[@]}"; do
+            platform=${artifact_dir#dist/agility-}
+
+            if [[ -f "$artifact_dir/agility.exe" ]]; then
+              cp "$artifact_dir/agility.exe" "release-assets/agility-${platform}.exe"
+            elif [[ -f "$artifact_dir/agility" ]]; then
+              cp "$artifact_dir/agility" "release-assets/agility-${platform}"
+            else
+              echo "::error::No CLI binary found in $artifact_dir"
+              exit 1
             fi
-
-            cp "$artifact" "release-assets/cli-${asset_suffix}${extension}"
           done
 
           ls -1 release-assets
@@ -222,18 +145,28 @@ jobs:
           set -euo pipefail
 
           tag_name='${{ needs.validate.outputs.release_tag }}'
-          prerelease_flag=''
+          prerelease_json='false'
 
           if [[ '${{ needs.validate.outputs.is_prerelease }}' == 'true' ]]; then
-            prerelease_flag='--prerelease'
+            prerelease_json='true'
           fi
 
           if gh release view "$tag_name" >/dev/null 2>&1; then
+            release_id=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag_name}" --jq '.id')
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+              --field name="$tag_name" \
+              --field prerelease="$prerelease_json"
             gh release upload "$tag_name" release-assets/* --clobber
           else
-            gh release create "$tag_name" release-assets/* \
-              --verify-tag \
-              --generate-notes \
-              --title "$tag_name" \
-              $prerelease_flag
+            create_args=(
+              --verify-tag
+              --generate-notes
+              --title "$tag_name"
+            )
+
+            if [[ "$prerelease_json" == 'true' ]]; then
+              create_args+=(--prerelease)
+            fi
+
+            gh release create "$tag_name" release-assets/* "${create_args[@]}"
           fi
