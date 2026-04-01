@@ -70,11 +70,11 @@ public class ViewStoryCommand implements Callable<Integer> {
           story.number(),
           story.name(),
           story.description(),
-          story.status() != null ? story.status().name() : null,
-          story.priority() != null ? story.priority().name() : null,
+          firstName(story.status()),
+          firstName(story.priority()),
           story.estimate() != null ? story.estimate().toString() : null,
-          story.timebox() != null ? story.timebox().name() : null,
-          story.scope() != null ? story.scope().name() : null,
+          firstName(story.timebox()),
+          firstName(story.scope()),
           story.owners() != null
               ? story.owners().stream().map(Named::name).collect(Collectors.joining(", "))
               : null);
@@ -85,15 +85,20 @@ public class ViewStoryCommand implements Callable<Integer> {
     return 0;
   }
 
+  /** Returns the name of the first element in a relation list, or null if absent/empty. */
+  private static String firstName(List<Named> relation) {
+    return (relation != null && !relation.isEmpty()) ? relation.get(0).name() : null;
+  }
+
   static record Story(
       @JsonProperty("Number") String number,
       @JsonProperty("Name") String name,
       @JsonProperty("Description") String description,
-      @JsonProperty("Status") Named status,
-      @JsonProperty("Priority") Named priority,
+      @JsonProperty("Status") List<Named> status,
+      @JsonProperty("Priority") List<Named> priority,
       @JsonProperty("Estimate") Double estimate,
-      @JsonProperty("Timebox") Named timebox,
-      @JsonProperty("Scope") Named scope,
+      @JsonProperty("Timebox") List<Named> timebox,
+      @JsonProperty("Scope") List<Named> scope,
       @JsonProperty("Owners") List<Named> owners) {
   }
 }
