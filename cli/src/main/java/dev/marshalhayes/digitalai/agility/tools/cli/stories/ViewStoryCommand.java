@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import dev.marshalhayes.digitalai.agility.tools.AgilityQueryClient;
 import dev.marshalhayes.digitalai.agility.tools.Named;
 import dev.marshalhayes.digitalai.agility.tools.cli.OutputOptions;
@@ -85,14 +86,14 @@ public class ViewStoryCommand implements Callable<Integer> {
   }
 
   static record Story(
-      String number,
-      String name,
-      String description,
-      Named status,
-      Named priority,
-      Double estimate,
-      Named timebox,
-      Named scope,
-      List<Named> owners) {
+      @JsonProperty("Number") String number,
+      @JsonProperty("Name") String name,
+      @JsonProperty("Description") String description,
+      @JsonProperty("Status") Named status,
+      @JsonProperty("Priority") Named priority,
+      @JsonProperty("Estimate") Double estimate,
+      @JsonProperty("Timebox") Named timebox,
+      @JsonProperty("Scope") Named scope,
+      @JsonProperty("Owners") List<Named> owners) {
   }
 }
