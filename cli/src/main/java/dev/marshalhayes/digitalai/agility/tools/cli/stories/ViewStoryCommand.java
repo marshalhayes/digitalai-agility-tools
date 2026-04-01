@@ -5,9 +5,11 @@ import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.github.ajalt.mordant.terminal.Terminal;
 import dev.marshalhayes.digitalai.agility.tools.AgilityQueryClient;
 import dev.marshalhayes.digitalai.agility.tools.Named;
 import dev.marshalhayes.digitalai.agility.tools.cli.OutputOptions;
+import dev.marshalhayes.digitalai.agility.tools.cli.SpinnerAnimation;
 import dev.marshalhayes.digitalai.agility.tools.cli.stories.ViewStoryCommand.Story;
 
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
@@ -27,6 +29,7 @@ public class ViewStoryCommand implements Callable<Integer> {
 
   private final AgilityQueryClient queryClient;
   private final StoryRenderer storyRenderer;
+  private final Terminal terminal;
   private static final ObjectMapper OUTPUT_MAPPER = JsonMapper.builder().build();
 
   @Parameters(description = "The story number, e.g. S-12345")
@@ -38,9 +41,11 @@ public class ViewStoryCommand implements Callable<Integer> {
   @Mixin
   private OutputOptions outputOptions;
 
-  public ViewStoryCommand(AgilityQueryClient queryClient, StoryRenderer storyRenderer) {
+  public ViewStoryCommand(AgilityQueryClient queryClient, StoryRenderer storyRenderer,
+      Terminal terminal) {
     this.queryClient = queryClient;
     this.storyRenderer = storyRenderer;
+    this.terminal = terminal;
   }
 
   @Override
@@ -49,7 +54,14 @@ public class ViewStoryCommand implements Callable<Integer> {
         .where("Number", storyNumber)
         .select(Story.class);
 
-    var stories = queryClient.query(query);
+    List<Story> stories;
+    if (outputOptions.isJson()) {
+      stories = queryClient.query(query);
+    } else {
+      try (var spinner = SpinnerAnimation.start(terminal, "Loading " + storyNumber + "...")) {
+        stories = queryClient.query(query);
+      }
+    }
 
     if (stories.isEmpty()) {
       spec.commandLine().getErr()
@@ -65,23 +77,20 @@ public class ViewStoryCommand implements Callable<Integer> {
       return 0;
     }
 
-    try (var writer = spec.commandLine().getOut()) {
-      var storyView = new StoryView(
-          story.number(),
-          story.name(),
-          story.description(),
-          firstName(story.status()),
-          firstName(story.priority()),
-          story.estimate() != null ? story.estimate().toString() : null,
-          firstName(story.timebox()),
-          firstName(story.scope()),
-          story.owners() != null
-              ? story.owners().stream().map(Named::name).collect(Collectors.joining(", "))
-              : null);
+    var storyView = new StoryView(
+        story.number(),
+        story.name(),
+        story.description(),
+        firstName(story.status()),
+        firstName(story.priority()),
+        story.estimate() != null ? story.estimate().toString() : null,
+        firstName(story.timebox()),
+        firstName(story.scope()),
+        story.owners() != null
+            ? story.owners().stream().map(Named::name).collect(Collectors.joining(", "))
+            : null);
 
-      storyRenderer.render(storyView, writer);
-    }
-
+    storyRenderer.render(storyView);
     return 0;
   }
 
