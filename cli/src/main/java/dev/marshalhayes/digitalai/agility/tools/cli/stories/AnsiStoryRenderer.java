@@ -16,14 +16,11 @@ class AnsiStoryRenderer implements StoryRenderer {
   private final Terminal terminal;
   private static final FlexmarkHtmlConverter HTML_TO_MD = FlexmarkHtmlConverter.builder().build();
 
-  // Matches [text](scheme:...) links where the scheme is non-http (e.g. mailto:, tel:, ftp:)
-  // These add no value in a terminal since the scheme is unactionable; show just the text.
-  private static final Pattern NON_HTTP_LINK = Pattern.compile(
-      "\\[([^\\]]+)]\\((?!https?://)([^)]+)\\)");
-
-  // Matches [text](url) where the text IS the url (auto-links). No need to repeat the url.
-  private static final Pattern AUTO_LINK = Pattern.compile(
-      "\\[([^\\]]+)]\\(https?://\\1\\)");
+  /**
+   * Strips ALL Markdown link URLs, leaving only the display text.
+   * Used in non-TTY mode where OSC-8 is unavailable and {@code text(url)} is noisy.
+   */
+  private static final Pattern ALL_LINKS = Pattern.compile("\\[([^\\]]+)]\\([^)]+\\)");
 
   AnsiStoryRenderer(Terminal terminal) {
     this.terminal = terminal;
@@ -38,6 +35,8 @@ class AnsiStoryRenderer implements StoryRenderer {
         null, null, TextAlign.LEFT, null, false), false);
     terminal.println(false);
 
+    boolean interactive = terminal.getInfo().getInteractive();
+
     var md = new StringBuilder();
     appendField(md, "Status", story.status());
     appendField(md, "Priority", story.priority());
@@ -48,10 +47,13 @@ class AnsiStoryRenderer implements StoryRenderer {
 
     if (story.description() != null && !story.description().isBlank()) {
       md.append("\n---\n\n");
-      md.append(convertHtml(story.description()));
+      md.append(convertHtml(story.description(), interactive));
     }
 
     if (!md.isEmpty()) {
+      // hyperlinks=null: Mordant auto-detects OSC-8 support from the terminal.
+      // In TTY mode links render as clickable OSC-8 sequences (text-only visible).
+      // In non-TTY mode we've already stripped link URLs, so this is moot.
       terminal.print(new Markdown(md.toString(), false, null), false);
     }
   }
@@ -60,14 +62,14 @@ class AnsiStoryRenderer implements StoryRenderer {
    * Converts HTML description to Markdown.
    *
    * <p>Pre-processes with jsoup to remove table rows whose cells contain only whitespace or
-   * {@code <br>} tags (artifact of rich-text editors). Post-processes to:
+   * {@code <br>} tags (artifact of rich-text editors). Post-processes based on rendering mode:
    * <ul>
-   *   <li>Strip non-HTTP links (mailto:, tel:, etc.) — show display text only</li>
-   *   <li>Strip auto-links where display text == URL — avoids repeating the URL</li>
-   *   <li>Remove unnecessary {@code \&} Markdown escaping (Mordant quirk in table cells)</li>
+   *   <li>TTY: keep all links — Mordant renders them as OSC-8 hyperlinks (clickable, no visible URL)</li>
+   *   <li>non-TTY: strip all link URLs — display text only, no {@code text(url)} noise in piped output</li>
+   *   <li>Both: remove unnecessary {@code \&} Markdown escaping (Mordant quirk in table cells)</li>
    * </ul>
    */
-  private static String convertHtml(String html) {
+  private static String convertHtml(String html, boolean interactive) {
     var doc = Jsoup.parseBodyFragment(html);
     doc.select("tr").forEach(row -> {
       boolean isEmpty = row.select("td, th").stream()
@@ -79,10 +81,10 @@ class AnsiStoryRenderer implements StoryRenderer {
 
     var markdown = HTML_TO_MD.convert(doc.body().html());
 
-    // Strip non-HTTP schemes (mailto:, tel:, ftp:, etc.) — show display text only
-    markdown = NON_HTTP_LINK.matcher(markdown).replaceAll("$1");
-    // Strip auto-links where text == url (no added value repeating the url)
-    markdown = AUTO_LINK.matcher(markdown).replaceAll("$1");
+    if (!interactive) {
+      // Non-TTY: strip all link URLs — show display text only, no text(url) clutter
+      markdown = ALL_LINKS.matcher(markdown).replaceAll("$1");
+    }
     // Mordant doesn't render \& in table cells — & needs no escaping in Markdown anyway
     markdown = markdown.replace("\\&", "&");
 
