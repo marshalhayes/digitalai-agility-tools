@@ -9,6 +9,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
+import org.jline.utils.AttributedString;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 
@@ -159,21 +160,21 @@ public final class HtmlRenderer {
     }
   }
 
-  private static List<String[]> buildTableRows(Element table, AttributedStyle style, boolean ansi) {
-    var rows = new ArrayList<String[]>();
+  private static List<AttributedString[]> buildTableRows(Element table, AttributedStyle style, boolean ansi) {
+    var rows = new ArrayList<AttributedString[]>();
     for (var row : table.select("tr")) {
-      var cells = new ArrayList<String>();
+      var cells = new ArrayList<AttributedString>();
       for (var cell : row.children()) {
         var cellTag = cell.normalName();
         if (cellTag.equals("th") || cellTag.equals("td")) {
           var cellStyle = cellTag.equals("th") ? style.bold() : style;
           var cellAsb = new AttributedStringBuilder();
           appendChildren(cell, cellAsb, cellStyle, ansi);
-          cells.add(ansi ? cellAsb.toAnsi() : cellAsb.toString());
+          cells.add(cellAsb.toAttributedString());
         }
       }
       if (!cells.isEmpty()) {
-        rows.add(cells.toArray(String[]::new));
+        rows.add(cells.toArray(AttributedString[]::new));
       }
     }
     return rows;

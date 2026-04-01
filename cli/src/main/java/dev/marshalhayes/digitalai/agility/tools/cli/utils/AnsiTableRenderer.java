@@ -3,33 +3,29 @@ package dev.marshalhayes.digitalai.agility.tools.cli.utils;
 import java.io.PrintWriter;
 import java.util.List;
 
+import org.jline.utils.AttributedString;
+import org.jline.utils.AttributedStringBuilder;
+import org.jline.utils.AttributedStyle;
+
+/**
+ * Renders a list of rows as a box-drawing table.
+ *
+ * <p>Accepts {@link AttributedString} cells so that JLine3 can report accurate visible widths
+ * without needing to strip ANSI escape codes manually.
+ */
 public class AnsiTableRenderer {
-  // Matches SGR sequences (\033[...m) and OSC 8 hyperlinks (\033]8;;href\007...\033]8;;\007)
-  private static final java.util.regex.Pattern ANSI_STRIP =
-      java.util.regex.Pattern.compile("\033\\[[0-9;]*[mA-Z]|\033]8;;[^\007]*\007");
 
-  private static String visibleWidth(String cell) {
-    if (cell == null) return "";
-    return ANSI_STRIP.matcher(cell).replaceAll("");
-  }
-
-  public static void render(List<String[]> rows, PrintWriter writer) {
+  public static void render(List<AttributedString[]> rows, PrintWriter writer) {
     if (rows.isEmpty()) {
       return;
     }
 
-    var columnCount = rows.stream()
-        .mapToInt(r -> r.length)
-        .max()
-        .orElse(0);
-
+    var columnCount = rows.stream().mapToInt(r -> r.length).max().orElse(0);
     var columnWidths = new int[columnCount];
 
     for (var row : rows) {
-      for (var columnIndex = 0; columnIndex < row.length; columnIndex++) {
-        var text = visibleWidth(row[columnIndex]);
-
-        columnWidths[columnIndex] = Math.max(columnWidths[columnIndex], text.length());
+      for (var col = 0; col < row.length; col++) {
+        columnWidths[col] = Math.max(columnWidths[col], row[col].length());
       }
     }
 
@@ -41,28 +37,21 @@ public class AnsiTableRenderer {
 
     for (var rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
       var row = rows.get(rowIndex);
+      var line = new AttributedStringBuilder();
 
-      for (var columnIndex = 0; columnIndex < columnCount; columnIndex++) {
-        writer.print("│ ");
-
-        if (columnIndex < row.length) {
-          var cell = row[columnIndex];
-
-          writer.print(cell);
-
-          var padding = columnWidths[columnIndex] - visibleWidth(cell).length();
-
-          for (var paddingIndex = 0; paddingIndex < padding; paddingIndex++) {
-            writer.print(' ');
-          }
+      for (var col = 0; col < columnCount; col++) {
+        line.append("│ ", AttributedStyle.DEFAULT);
+        if (col < row.length) {
+          line.append(row[col]);
+          line.append(" ".repeat(columnWidths[col] - row[col].length()), AttributedStyle.DEFAULT);
         } else {
-          writer.print(" ".repeat(columnWidths[columnIndex]));
+          line.append(" ".repeat(columnWidths[col]), AttributedStyle.DEFAULT);
         }
-
-        writer.print(' ');
+        line.append(" ", AttributedStyle.DEFAULT);
       }
 
-      writer.println("│");
+      line.append("│", AttributedStyle.DEFAULT);
+      writer.println(line.toAnsi());
 
       if (rowIndex < rows.size() - 1) {
         writer.println(midBorder);
@@ -73,22 +62,11 @@ public class AnsiTableRenderer {
   }
 
   private static String buildBorder(char left, char fill, char mid, char right, int[] columnWidths) {
-    var stringBuilder = new StringBuilder();
-
-    stringBuilder.append(left);
-
-    for (var columnIndex = 0; columnIndex < columnWidths.length; columnIndex++) {
-      if (columnIndex > 0) {
-        stringBuilder.append(mid);
-      }
-
-      for (var fillIndex = 0; fillIndex < columnWidths[columnIndex] + 2; fillIndex++) {
-        stringBuilder.append(fill);
-      }
+    var sb = new StringBuilder().append(left);
+    for (var col = 0; col < columnWidths.length; col++) {
+      if (col > 0) sb.append(mid);
+      sb.append(String.valueOf(fill).repeat(columnWidths[col] + 2));
     }
-
-    stringBuilder.append(right);
-
-    return stringBuilder.toString();
+    return sb.append(right).toString();
   }
 }

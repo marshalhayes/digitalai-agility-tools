@@ -10,7 +10,6 @@ import dev.marshalhayes.digitalai.agility.tools.cli.OutputOptions;
 import dev.marshalhayes.digitalai.agility.tools.cli.stories.ViewStoryCommand.Story;
 
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
@@ -18,6 +17,7 @@ import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 @Component
 @Command(name = "view", mixinStandardHelpOptions = true)
@@ -26,7 +26,7 @@ public class ViewStoryCommand implements Callable<Integer> {
 
   private final AgilityQueryClient queryClient;
   private final StoryRenderer storyRenderer;
-  private final ObjectMapper objectMapper;
+  private static final ObjectMapper OUTPUT_MAPPER = JsonMapper.builder().build();
 
   @Parameters(description = "The story number, e.g. S-12345")
   private String storyNumber;
@@ -37,11 +37,9 @@ public class ViewStoryCommand implements Callable<Integer> {
   @Mixin
   private OutputOptions outputOptions;
 
-  public ViewStoryCommand(AgilityQueryClient queryClient, StoryRenderer storyRenderer,
-      @Qualifier("agilityObjectMapper") ObjectMapper objectMapper) {
+  public ViewStoryCommand(AgilityQueryClient queryClient, StoryRenderer storyRenderer) {
     this.queryClient = queryClient;
     this.storyRenderer = storyRenderer;
-    this.objectMapper = objectMapper;
   }
 
   @Override
@@ -62,7 +60,7 @@ public class ViewStoryCommand implements Callable<Integer> {
 
     if (outputOptions.isJson()) {
       spec.commandLine().getOut()
-          .println(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(story));
+          .println(OUTPUT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(story));
       return 0;
     }
 
