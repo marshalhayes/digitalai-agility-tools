@@ -1,13 +1,25 @@
 package dev.marshalhayes.digitalai.agility.tools.cli.stories;
 
 import com.github.ajalt.mordant.markdown.Markdown;
+import com.github.ajalt.mordant.rendering.BorderType;
 import com.github.ajalt.mordant.rendering.TextAlign;
+import com.github.ajalt.mordant.rendering.TextColors;
+import com.github.ajalt.mordant.rendering.TextStyles;
+import com.github.ajalt.mordant.rendering.OverflowWrap;
+import com.github.ajalt.mordant.rendering.Widget;
+import com.github.ajalt.mordant.rendering.Whitespace;
+import com.github.ajalt.mordant.table.TableDslKt;
 import com.github.ajalt.mordant.terminal.Terminal;
-import com.github.ajalt.mordant.widgets.HorizontalRule;
+import com.github.ajalt.mordant.widgets.Padding;
+import com.github.ajalt.mordant.widgets.Panel;
+import com.github.ajalt.mordant.widgets.Text;
 import com.vladsch.flexmark.html2md.converter.FlexmarkHtmlConverter;
+import kotlin.Unit;
 import org.jsoup.Jsoup;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Pattern;
 
 @Component
@@ -16,10 +28,7 @@ class AnsiStoryRenderer implements StoryRenderer {
   private final Terminal terminal;
   private static final FlexmarkHtmlConverter HTML_TO_MD = FlexmarkHtmlConverter.builder().build();
 
-  /**
-   * Strips ALL Markdown link URLs, leaving only the display text.
-   * Used in non-TTY mode where OSC-8 is unavailable and {@code text(url)} is noisy.
-   */
+  /** Strips all Markdown link URLs, leaving only the display text. */
   private static final Pattern ALL_LINKS = Pattern.compile("\\[([^\\]]+)]\\([^)]+\\)");
 
   AnsiStoryRenderer(Terminal terminal) {
@@ -28,48 +37,104 @@ class AnsiStoryRenderer implements StoryRenderer {
 
   @Override
   public void render(StoryView story) {
-    // Title: HorizontalRule with left-aligned text keeps the decorative rule while
-    // avoiding Mordant's default center-alignment for Markdown ## headings.
-    terminal.print(new HorizontalRule(
-        story.number() + " \u2014 " + story.name(),
-        null, null, TextAlign.LEFT, null, false), false);
+    boolean interactive = terminal.getInfo().getInteractive();
+    boolean ansiHyperLinks = terminal.getInfo().getAnsiHyperLinks();
+
+    // Title: Panel with rounded border. Story number in the border title,
+    // story name as panel body. Expands to fill terminal width.
+    terminal.print(titlePanel(story), false);
     terminal.println(false);
 
-    boolean interactive = terminal.getInfo().getInteractive();
-
-    var md = new StringBuilder();
-    appendField(md, "Status", story.status());
-    appendField(md, "Priority", story.priority());
-    appendField(md, "Estimate", story.estimate());
-    appendField(md, "Sprint", story.sprint());
-    appendField(md, "Project", story.project());
-    appendField(md, "Owners", story.owners());
-
-    if (story.description() != null && !story.description().isBlank()) {
-      md.append("\n---\n\n");
-      md.append(convertHtml(story.description(), interactive));
+    // Metadata: compact 3-column grid (labels dim, status color-coded).
+    var meta = metadataGrid(story);
+    if (meta != null) {
+      terminal.print(meta, false);
+      terminal.println(false);
     }
 
-    if (!md.isEmpty()) {
-      // hyperlinks=null: Mordant auto-detects OSC-8 support from the terminal.
-      // In TTY mode links render as clickable OSC-8 sequences (text-only visible).
-      // In non-TTY mode we've already stripped link URLs, so this is moot.
-      terminal.print(new Markdown(md.toString(), false, null), false);
+    // Description: HTML converted to Markdown, rendered by Mordant.
+    if (story.description() != null && !story.description().isBlank()) {
+      var md = convertHtml(story.description(), interactive, ansiHyperLinks);
+      // hyperlinks=false prevents Mordant's text(url) fallback when OSC-8 is unavailable.
+      terminal.print(new Markdown(md, false, ansiHyperLinks ? null : Boolean.FALSE), false);
     }
   }
 
+  private Widget titlePanel(StoryView story) {
+    return new Panel(
+        new Text(story.name(), Whitespace.NORMAL, TextAlign.LEFT, OverflowWrap.NORMAL, null, null),
+        new Text(story.number(), Whitespace.PRE, TextAlign.LEFT, OverflowWrap.NORMAL, null, null),
+        null,
+        true,
+        new Padding(0, 1, 0, 1),
+        BorderType.Companion.getROUNDED(),
+        TextAlign.LEFT,
+        TextAlign.LEFT,
+        TextStyles.dim.getStyle(),
+        null
+    );
+  }
+
+  private Widget metadataGrid(StoryView story) {
+    var fields = new ArrayList<String[]>();
+    addField(fields, "Status", colorizeStatus(story.status()));
+    addField(fields, "Priority", story.priority());
+    addField(fields, "Estimate", story.estimate());
+    addField(fields, "Sprint", story.sprint());
+    addField(fields, "Project", story.project());
+    addField(fields, "Owners", story.owners());
+
+    if (fields.isEmpty()) return null;
+
+    // Split fields into rows of 3 for a compact multi-column layout.
+    var rows = new ArrayList<List<String[]>>();
+    for (int i = 0; i < fields.size(); i += 3) {
+      rows.add(fields.subList(i, Math.min(i + 3, fields.size())));
+    }
+
+    return TableDslKt.grid(gridBuilder -> {
+      for (var rowFields : rows) {
+        gridBuilder.row(rowBuilder -> {
+          for (var field : rowFields) {
+            rowBuilder.cell(field[0] + field[1], cellBuilder -> {
+              cellBuilder.setPadding(new Padding(0, 3, 0, 0));
+              return Unit.INSTANCE;
+            });
+          }
+          return Unit.INSTANCE;
+        });
+      }
+      return Unit.INSTANCE;
+    });
+  }
+
+  private static void addField(List<String[]> fields, String label, String value) {
+    if (value != null && !value.isBlank()) {
+      // Label styled dim, value unstyled (or pre-colored via colorizeStatus).
+      fields.add(new String[]{TextStyles.dim.invoke(label + "  "), value});
+    }
+  }
+
+  private static String colorizeStatus(String status) {
+    if (status == null) return null;
+    return switch (status.toLowerCase()) {
+      case "done", "accepted", "closed", "completed" -> TextColors.brightGreen.invoke(status);
+      case "in progress", "active", "in-progress" -> TextColors.brightYellow.invoke(status);
+      case "future", "backlog", "unassigned" -> TextColors.gray.invoke(status);
+      default -> status;
+    };
+  }
+
   /**
-   * Converts HTML description to Markdown.
+   * Converts HTML to Markdown, removing empty table rows and handling links.
    *
-   * <p>Pre-processes with jsoup to remove table rows whose cells contain only whitespace or
-   * {@code <br>} tags (artifact of rich-text editors). Post-processes based on rendering mode:
    * <ul>
-   *   <li>TTY: keep all links — Mordant renders them as OSC-8 hyperlinks (clickable, no visible URL)</li>
-   *   <li>non-TTY: strip all link URLs — display text only, no {@code text(url)} noise in piped output</li>
-   *   <li>Both: remove unnecessary {@code \&} Markdown escaping (Mordant quirk in table cells)</li>
+   *   <li>TTY + OSC-8: keep all links — Mordant renders them as clickable hyperlinks</li>
+   *   <li>Otherwise: strip link URLs to display text only (avoids {@code text(url)} clutter)</li>
+   *   <li>Both: remove {@code \&} escaping (Mordant quirk in table cells)</li>
    * </ul>
    */
-  private static String convertHtml(String html, boolean interactive) {
+  private static String convertHtml(String html, boolean interactive, boolean ansiHyperLinks) {
     var doc = Jsoup.parseBodyFragment(html);
     doc.select("tr").forEach(row -> {
       boolean isEmpty = row.select("td, th").stream()
@@ -81,19 +146,15 @@ class AnsiStoryRenderer implements StoryRenderer {
 
     var markdown = HTML_TO_MD.convert(doc.body().html());
 
-    if (!interactive) {
-      // Non-TTY: strip all link URLs — show display text only, no text(url) clutter
+    if (!interactive || !ansiHyperLinks) {
+      // Strip link URLs when OSC-8 unavailable to avoid text(url) noise
       markdown = ALL_LINKS.matcher(markdown).replaceAll("$1");
     }
-    // Mordant doesn't render \& in table cells — & needs no escaping in Markdown anyway
+    // Mordant doesn't render \& in table cells — & needs no escaping in Markdown
     markdown = markdown.replace("\\&", "&");
+    // Collapse 3+ consecutive newlines to 2 (single blank line) to reduce noise
+    markdown = markdown.replaceAll("\n{3,}", "\n\n");
 
     return markdown;
-  }
-
-  private static void appendField(StringBuilder md, String label, String value) {
-    if (value != null && !value.isBlank()) {
-      md.append("**").append(label).append(":** ").append(value).append("  \n");
-    }
   }
 }
