@@ -21,6 +21,11 @@ public class DefaultAgilityQueryClient implements AgilityQueryClient {
     this.objectMapper = objectMapper;
   }
 
+  @Override
+  public AgilityQuery.Builder from(String assetType) {
+    return new AgilityQuery.Builder(assetType, objectMapper);
+  }
+
   private String execute(String queryJson) {
     log.debug("Sending query to /query.v1: {}", queryJson);
 

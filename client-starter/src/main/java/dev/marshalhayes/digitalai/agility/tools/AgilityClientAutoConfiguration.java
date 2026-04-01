@@ -1,6 +1,5 @@
 package dev.marshalhayes.digitalai.agility.tools;
 
-import jakarta.annotation.PostConstruct;
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -16,23 +15,18 @@ import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration
 @EnableConfigurationProperties(AgilityClientConfigurationProperties.class)
-@RegisterReflectionForBinding({AgilityQuery.class, AgilityQuery.PageSpec.class})
+@RegisterReflectionForBinding({AgilityQuery.class, AgilityQuery.PageSpec.class, Named.class})
 public class AgilityClientAutoConfiguration {
-  @PostConstruct
-  void configureAgility() {
-    AgilityQuery.configure(agilityObjectMapper());
-  }
-
   @Bean
   @Lazy
   @ConditionalOnMissingBean(name = "agilityRestClient")
   RestClient agilityRestClient(AgilityClientConfigurationProperties config) {
-    Assert.hasText(config.getUrl(), "Agility url is required");
-    Assert.hasText(config.getAccessToken(), "Agility access token is required");
+    Assert.hasText(config.url(), "Agility url is required");
+    Assert.hasText(config.accessToken(), "Agility access token is required");
 
     return RestClient.builder()
-        .baseUrl(config.getUrl())
-        .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer %s".formatted(config.getAccessToken()))
+        .baseUrl(config.url())
+        .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer %s".formatted(config.accessToken()))
         .build();
   }
 

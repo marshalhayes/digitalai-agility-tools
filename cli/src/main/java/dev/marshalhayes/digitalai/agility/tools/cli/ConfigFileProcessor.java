@@ -6,15 +6,16 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.json.JsonParserFactory;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 
-@Slf4j
 public class ConfigFileProcessor implements EnvironmentPostProcessor {
+  private static final Logger log = LoggerFactory.getLogger(ConfigFileProcessor.class);
   private static final Path CONFIG_PATH = Path.of(System.getProperty("user.home"), ".agility", "config.json");
 
   private static final Map<String, String> KEY_MAP = Map.of(

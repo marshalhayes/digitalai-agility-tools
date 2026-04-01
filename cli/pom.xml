@@ -14,7 +14,8 @@
 
   <properties>
     <picocli.version>4.7.7</picocli.version>
-    <jsoup.version>1.19.1</jsoup.version>
+    <jsoup.version>1.22.1</jsoup.version>
+    <jline.version>3.26.3</jline.version>
   </properties>
 
   <dependencies>
@@ -30,15 +31,15 @@
     </dependency>
 
     <dependency>
-      <groupId>org.projectlombok</groupId>
-      <artifactId>lombok</artifactId>
-      <optional>true</optional>
-    </dependency>
-
-    <dependency>
       <groupId>org.jsoup</groupId>
       <artifactId>jsoup</artifactId>
       <version>${jsoup.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.jline</groupId>
+      <artifactId>jline-terminal</artifactId>
+      <version>${jline.version}</version>
     </dependency>
   </dependencies>
 
@@ -50,10 +51,6 @@
 
         <configuration>
           <annotationProcessorPaths>
-            <path>
-              <groupId>org.projectlombok</groupId>
-              <artifactId>lombok</artifactId>
-            </path>
             
             <path>
               <groupId>info.picocli</groupId>
@@ -87,12 +84,6 @@
         </executions>
 
         <configuration>
-          <excludes>
-            <exclude>
-              <groupId>org.projectlombok</groupId>
-              <artifactId>lombok</artifactId>
-            </exclude>
-          </excludes>
         </configuration>
       </plugin>
     </plugins>

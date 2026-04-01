@@ -6,4 +6,6 @@ public interface AgilityQueryClient {
   <T> List<T> query(AgilityQuery<T> query, Class<T> type);
 
   <T> List<T> query(AgilityQuery<T> query);
+
+  AgilityQuery.Builder from(String assetType);
 }

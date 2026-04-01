@@ -20,12 +20,6 @@ import tools.jackson.databind.introspect.ClassIntrospector;
 
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class AgilityQuery<T> {
-  private static ObjectMapper objectMapper = new ObjectMapper();
-
-  public static void configure(ObjectMapper mapper) {
-    objectMapper = mapper;
-  }
-
   @JsonProperty("from")
   private final String from;
 
@@ -42,19 +36,17 @@ public class AgilityQuery<T> {
   private PageSpec page;
 
   private final transient Class<T> type;
+  private final transient ObjectMapper objectMapper;
 
   private AgilityQuery(String from, List<Object> select, Map<String, Object> where,
-      List<String> sort, PageSpec page, Class<T> type) {
+      List<String> sort, PageSpec page, Class<T> type, ObjectMapper objectMapper) {
     this.from = from;
     this.select = select;
     this.where = where;
     this.sort = sort;
     this.page = page;
     this.type = type;
-  }
-
-  public static Builder from(String assetType) {
-    return new Builder(assetType);
+    this.objectMapper = objectMapper;
   }
 
   public T map(JsonNode json) {
@@ -69,12 +61,14 @@ public class AgilityQuery<T> {
 
   public static class Builder {
     private final String from;
+    private final ObjectMapper objectMapper;
     private final Map<String, Object> where = new LinkedHashMap<>();
     private final List<String> sort = new ArrayList<>();
     private PageSpec page;
 
-    private Builder(String from) {
+    Builder(String from, ObjectMapper objectMapper) {
       this.from = from;
+      this.objectMapper = objectMapper;
     }
 
     public Builder where(String attribute, Object value) {
@@ -101,14 +95,14 @@ public class AgilityQuery<T> {
       var introspector = objectMapper.serializationConfig()
           .classIntrospectorInstance();
 
-      var selectItems = buildSelectItems(type, introspector);
+      var selectItems = buildSelectItems(type, introspector, objectMapper);
 
-      return new AgilityQuery<>(from, selectItems, where, sort, page, type);
+      return new AgilityQuery<>(from, selectItems, where, sort, page, type, objectMapper);
     }
   }
 
-  private static List<Object> buildSelectItems(Class<?> type, ClassIntrospector introspector) {
-    var beanDesc = introspect(type, introspector);
+  private static List<Object> buildSelectItems(Class<?> type, ClassIntrospector introspector, ObjectMapper objectMapper) {
+    var beanDesc = introspect(type, introspector, objectMapper);
     var items = new ArrayList<Object>();
 
     for (var prop : beanDesc.findProperties()) {
@@ -116,28 +110,28 @@ public class AgilityQuery<T> {
         continue;
       }
 
-      items.add(toField(prop, introspector));
+      items.add(toField(prop, introspector, objectMapper));
     }
 
     return items;
   }
 
-  private static Object toField(BeanPropertyDefinition prop, ClassIntrospector introspector) {
+  private static Object toField(BeanPropertyDefinition prop, ClassIntrospector introspector, ObjectMapper objectMapper) {
     var name = StringUtils.capitalize(prop.getName());
     var propType = prop.getPrimaryType();
 
     if (isComplexType(propType)) {
-      return subquery(name, propType.getRawClass(), introspector);
+      return subquery(name, propType.getRawClass(), introspector, objectMapper);
     }
 
     if (propType.isContainerType() && isComplexType(propType.getContentType())) {
-      return subquery(name, propType.getContentType().getRawClass(), introspector);
+      return subquery(name, propType.getContentType().getRawClass(), introspector, objectMapper);
     }
 
     return name;
   }
 
-  private static BeanDescription introspect(Class<?> type, ClassIntrospector introspector) {
+  private static BeanDescription introspect(Class<?> type, ClassIntrospector introspector, ObjectMapper objectMapper) {
     var javaType = objectMapper.constructType(type);
 
     var annotatedClass = introspector
@@ -147,13 +141,13 @@ public class AgilityQuery<T> {
   }
 
   private static Object subquery(String relationName, Class<?> type,
-      ClassIntrospector introspector) {
-    var beanDesc = introspect(type, introspector);
+      ClassIntrospector introspector, ObjectMapper objectMapper) {
+    var beanDesc = introspect(type, introspector, objectMapper);
 
     var fields = beanDesc.findProperties()
         .stream()
         .filter(BeanPropertyDefinition::couldDeserialize)
-        .map(p -> toField(p, introspector))
+        .map(p -> toField(p, introspector, objectMapper))
         .toList();
 
     return Map.of("from", relationName, "select", fields);

@@ -3,9 +3,16 @@ package dev.marshalhayes.digitalai.agility.tools.cli.utils;
 import java.io.PrintWriter;
 import java.util.List;
 
-import picocli.CommandLine.Help.Ansi;
-
 public class AnsiTableRenderer {
+  // Matches SGR sequences (\033[...m) and OSC 8 hyperlinks (\033]8;;href\007...\033]8;;\007)
+  private static final java.util.regex.Pattern ANSI_STRIP =
+      java.util.regex.Pattern.compile("\033\\[[0-9;]*[mA-Z]|\033]8;;[^\007]*\007");
+
+  private static String visibleWidth(String cell) {
+    if (cell == null) return "";
+    return ANSI_STRIP.matcher(cell).replaceAll("");
+  }
+
   public static void render(List<String[]> rows, PrintWriter writer) {
     if (rows.isEmpty()) {
       return;
@@ -20,7 +27,7 @@ public class AnsiTableRenderer {
 
     for (var row : rows) {
       for (var columnIndex = 0; columnIndex < row.length; columnIndex++) {
-        var text = Ansi.OFF.text(row[columnIndex]).toString();
+        var text = visibleWidth(row[columnIndex]);
 
         columnWidths[columnIndex] = Math.max(columnWidths[columnIndex], text.length());
       }
@@ -43,7 +50,7 @@ public class AnsiTableRenderer {
 
           writer.print(cell);
 
-          var padding = columnWidths[columnIndex] - Ansi.OFF.text(cell).toString().length();
+          var padding = columnWidths[columnIndex] - visibleWidth(cell).length();
 
           for (var paddingIndex = 0; paddingIndex < padding; paddingIndex++) {
             writer.print(' ');
