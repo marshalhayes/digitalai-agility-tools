@@ -32,12 +32,16 @@ import tools.jackson.databind.json.JsonMapper;
     Story.Member.class
 })
 public class ViewStoryCommand implements Callable<Integer> {
-
   private final ObjectProvider<AgilityQueryClient> queryClientProvider;
+
   private final StoryRenderer storyRenderer;
+
   private final Terminal terminal;
+
   private final AgilityClientConfigurationProperties config;
-  private static final ObjectMapper OUTPUT_MAPPER = JsonMapper.builder().build();
+
+  private static final ObjectMapper OUTPUT_MAPPER = JsonMapper.builder()
+      .build();
 
   @Parameters(description = "The story number, e.g. S-12345")
   private String storyNumber;
@@ -92,11 +96,11 @@ public class ViewStoryCommand implements Callable<Integer> {
         story.number(),
         story.name(),
         story.description(),
-        story.status() != null ? story.status().name() : null,
-        story.priority() != null ? story.priority().name() : null,
+        firstName(story.status(), Story.Status::name),
+        firstName(story.priority(), Story.Priority::name),
         story.estimate() != null ? story.estimate().toString() : null,
-        story.timebox() != null ? story.timebox().name() : null,
-        story.scope() != null ? story.scope().name() : null,
+        firstName(story.timebox(), Story.Timebox::name),
+        firstName(story.scope(), Story.Scope::name),
         story.owners() != null
             ? story.owners().stream().map(Story.Member::name).collect(Collectors.joining(", "))
             : null,
@@ -104,5 +108,9 @@ public class ViewStoryCommand implements Callable<Integer> {
 
     storyRenderer.render(storyView);
     return 0;
+  }
+
+  private static <T> String firstName(List<T> list, java.util.function.Function<T, String> nameExtractor) {
+    return list != null && !list.isEmpty() ? nameExtractor.apply(list.get(0)) : null;
   }
 }

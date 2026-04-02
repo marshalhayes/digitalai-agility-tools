@@ -14,94 +14,99 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AgilityQueryTest {
+  record ScalarRecord(String number, String name, Double estimate) {
+  }
 
-    record ScalarRecord(String number, String name, Double estimate) {}
-    record RelationRecord(@JsonProperty("_oid") String oid, String name) {}
-    record ComplexRecord(String number, RelationRecord status, List<RelationRecord> owners, @JsonProperty("_oid") String oid) {}
+  record RelationRecord(@JsonProperty("_oid") String oid, String name) {
+  }
 
-    private static final ObjectMapper mapper = JsonMapper.builder()
-            .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES)
-            .enable(DeserializationFeature.UNWRAP_SINGLE_VALUE_ARRAYS)
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-            .build();
+  record ComplexRecord(String number, RelationRecord status, List<RelationRecord> owners,
+      @JsonProperty("_oid") String oid) {
+  }
 
-    @Test
-    void scalarFieldsProduceStringSelectItems() throws Exception {
-        var query = AgilityQuery.builder("Story", mapper).select(ScalarRecord.class);
-        JsonNode root = mapper.readTree(mapper.writeValueAsString(query));
-        JsonNode select = root.get("select");
+  private static final ObjectMapper mapper = JsonMapper.builder()
+      .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES)
+      .enable(DeserializationFeature.UNWRAP_SINGLE_VALUE_ARRAYS)
+      .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+      .build();
 
-        assertThat(select).isNotNull();
-        assertThat(select.isArray()).isTrue();
-        assertThat(select).hasSize(3);
+  @Test
+  void scalarFieldsProduceStringSelectItems() throws Exception {
+    var query = AgilityQuery.builder("Story", mapper).select(ScalarRecord.class);
+    JsonNode root = mapper.readTree(mapper.writeValueAsString(query));
+    JsonNode select = root.get("select");
 
-        List<String> values = new ArrayList<>();
-        select.forEach(n -> values.add(n.textValue()));
-        assertThat(values).containsExactlyInAnyOrder("Number", "Name", "Estimate");
+    assertThat(select).isNotNull();
+    assertThat(select.isArray()).isTrue();
+    assertThat(select).hasSize(3);
+
+    List<String> values = new ArrayList<>();
+    select.forEach(n -> values.add(n.stringValue()));
+    assertThat(values).containsExactlyInAnyOrder("Number", "Name", "Estimate");
+  }
+
+  @Test
+  void complexRelationProducesSubquery() throws Exception {
+    var query = AgilityQuery.builder("Story", mapper).select(ComplexRecord.class);
+    JsonNode root = mapper.readTree(mapper.writeValueAsString(query));
+    JsonNode select = root.get("select");
+
+    boolean hasNumber = false;
+    JsonNode statusSubquery = null;
+    JsonNode ownersSubquery = null;
+
+    for (JsonNode item : select) {
+      if (item.isString() && "Number".equals(item.stringValue())) {
+        hasNumber = true;
+      } else if (item.isObject() && "Status".equals(item.path("from").stringValue())) {
+        statusSubquery = item;
+      } else if (item.isObject() && "Owners".equals(item.path("from").stringValue())) {
+        ownersSubquery = item;
+      }
     }
 
-    @Test
-    void complexRelationProducesSubquery() throws Exception {
-        var query = AgilityQuery.builder("Story", mapper).select(ComplexRecord.class);
-        JsonNode root = mapper.readTree(mapper.writeValueAsString(query));
-        JsonNode select = root.get("select");
+    assertThat(hasNumber).as("Number scalar should be in select").isTrue();
 
-        boolean hasNumber = false;
-        JsonNode statusSubquery = null;
-        JsonNode ownersSubquery = null;
+    assertThat(statusSubquery).as("Status subquery should be present").isNotNull();
+    List<String> statusSelectValues = new ArrayList<>();
+    statusSubquery.get("select").forEach(n -> statusSelectValues.add(n.stringValue()));
+    assertThat(statusSelectValues).as("Status subquery select should contain Name").contains("Name");
 
-        for (JsonNode item : select) {
-            if (item.isTextual() && "Number".equals(item.textValue())) {
-                hasNumber = true;
-            } else if (item.isObject() && "Status".equals(item.path("from").textValue())) {
-                statusSubquery = item;
-            } else if (item.isObject() && "Owners".equals(item.path("from").textValue())) {
-                ownersSubquery = item;
-            }
-        }
+    assertThat(ownersSubquery).as("Owners subquery should be present").isNotNull();
+    List<String> ownersSelectValues = new ArrayList<>();
+    ownersSubquery.get("select").forEach(n -> ownersSelectValues.add(n.stringValue()));
+    assertThat(ownersSelectValues).as("Owners subquery select should contain Name").contains("Name");
+  }
 
-        assertThat(hasNumber).as("Number scalar should be in select").isTrue();
+  @Test
+  void oidFieldsExcludedFromTopLevelSelect() throws Exception {
+    var query = AgilityQuery.builder("Story", mapper).select(ComplexRecord.class);
+    JsonNode root = mapper.readTree(mapper.writeValueAsString(query));
+    JsonNode select = root.get("select");
 
-        assertThat(statusSubquery).as("Status subquery should be present").isNotNull();
-        List<String> statusSelectValues = new ArrayList<>();
-        statusSubquery.get("select").forEach(n -> statusSelectValues.add(n.textValue()));
-        assertThat(statusSelectValues).as("Status subquery select should contain Name").contains("Name");
-
-        assertThat(ownersSubquery).as("Owners subquery should be present").isNotNull();
-        List<String> ownersSelectValues = new ArrayList<>();
-        ownersSubquery.get("select").forEach(n -> ownersSelectValues.add(n.textValue()));
-        assertThat(ownersSelectValues).as("Owners subquery select should contain Name").contains("Name");
+    for (JsonNode item : select) {
+      if (item.isString()) {
+        assertThat(item.stringValue()).isNotEqualTo("_oid");
+        assertThat(item.stringValue()).isNotEqualTo("Oid");
+      }
     }
+  }
 
-    @Test
-    void oidFieldsExcludedFromTopLevelSelect() throws Exception {
-        var query = AgilityQuery.builder("Story", mapper).select(ComplexRecord.class);
-        JsonNode root = mapper.readTree(mapper.writeValueAsString(query));
-        JsonNode select = root.get("select");
+  @Test
+  void oidFieldsExcludedFromSubquerySelect() throws Exception {
+    var query = AgilityQuery.builder("Story", mapper).select(ComplexRecord.class);
+    JsonNode root = mapper.readTree(mapper.writeValueAsString(query));
+    JsonNode select = root.get("select");
 
-        for (JsonNode item : select) {
-            if (item.isTextual()) {
-                assertThat(item.textValue()).isNotEqualTo("_oid");
-                assertThat(item.textValue()).isNotEqualTo("Oid");
-            }
-        }
+    for (JsonNode item : select) {
+      if (item.isObject() && item.has("select")) {
+        item.get("select").forEach(subItem -> {
+          if (subItem.isString()) {
+            assertThat(subItem.stringValue()).isNotEqualTo("_oid");
+            assertThat(subItem.stringValue()).isNotEqualTo("Oid");
+          }
+        });
+      }
     }
-
-    @Test
-    void oidFieldsExcludedFromSubquerySelect() throws Exception {
-        var query = AgilityQuery.builder("Story", mapper).select(ComplexRecord.class);
-        JsonNode root = mapper.readTree(mapper.writeValueAsString(query));
-        JsonNode select = root.get("select");
-
-        for (JsonNode item : select) {
-            if (item.isObject() && item.has("select")) {
-                item.get("select").forEach(subItem -> {
-                    if (subItem.isTextual()) {
-                        assertThat(subItem.textValue()).isNotEqualTo("_oid");
-                        assertThat(subItem.textValue()).isNotEqualTo("Oid");
-                    }
-                });
-            }
-        }
-    }
+  }
 }
