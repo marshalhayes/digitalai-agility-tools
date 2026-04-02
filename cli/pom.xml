@@ -54,6 +54,12 @@
       <artifactId>flexmark-html2md-converter</artifactId>
       <version>${flexmark.version}</version>
     </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

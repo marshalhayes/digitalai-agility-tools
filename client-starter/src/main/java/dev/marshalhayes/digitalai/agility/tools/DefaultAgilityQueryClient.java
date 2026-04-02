@@ -23,7 +23,7 @@ public class DefaultAgilityQueryClient implements AgilityQueryClient {
 
   @Override
   public AgilityQuery.Builder from(String assetType) {
-    return new AgilityQuery.Builder(assetType, objectMapper);
+    return AgilityQuery.builder(assetType, objectMapper);
   }
 
   private String execute(String queryJson) {
@@ -40,18 +40,6 @@ public class DefaultAgilityQueryClient implements AgilityQueryClient {
     log.debug("Response from /query.v1: {}", response);
 
     return response;
-  }
-
-  @Override
-  public <T> List<T> query(AgilityQuery<T> query, Class<T> type) {
-    var responseJson = execute(serialize(query));
-
-    var resultSet = firstResultSet(responseJson);
-
-    var listType = objectMapper.getTypeFactory()
-        .constructCollectionType(List.class, type);
-
-    return objectMapper.convertValue(resultSet, listType);
   }
 
   @Override
@@ -89,7 +77,7 @@ public class DefaultAgilityQueryClient implements AgilityQueryClient {
     var results = new ArrayList<T>(resultSet.size());
 
     for (var asset : resultSet) {
-      results.add(query.map(asset));
+      results.add(objectMapper.convertValue(asset, query.type()));
     }
 
     return List.copyOf(results);

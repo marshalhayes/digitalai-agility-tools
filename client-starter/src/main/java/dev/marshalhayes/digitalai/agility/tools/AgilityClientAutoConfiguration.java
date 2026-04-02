@@ -9,13 +9,14 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpHeaders;
 import org.springframework.util.Assert;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.MapperFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration
 @EnableConfigurationProperties(AgilityClientConfigurationProperties.class)
-@RegisterReflectionForBinding({AgilityQuery.class, AgilityQuery.PageSpec.class, Named.class})
+@RegisterReflectionForBinding({AgilityQuery.class, AgilityQuery.PageSpec.class})
 public class AgilityClientAutoConfiguration {
   @Bean
   @Lazy
@@ -36,6 +37,8 @@ public class AgilityClientAutoConfiguration {
   ObjectMapper agilityObjectMapper() {
     return JsonMapper.builder()
         .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES)
+        .enable(DeserializationFeature.UNWRAP_SINGLE_VALUE_ARRAYS)
+        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
         .build();
   }
 

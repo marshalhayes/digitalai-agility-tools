@@ -13,7 +13,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.util.StringUtils;
 import tools.jackson.databind.BeanDescription;
 import tools.jackson.databind.JavaType;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.introspect.BeanPropertyDefinition;
 import tools.jackson.databind.introspect.ClassIntrospector;
@@ -36,21 +35,23 @@ public class AgilityQuery<T> {
   private PageSpec page;
 
   private final transient Class<T> type;
-  private final transient ObjectMapper objectMapper;
 
   private AgilityQuery(String from, List<Object> select, Map<String, Object> where,
-      List<String> sort, PageSpec page, Class<T> type, ObjectMapper objectMapper) {
+      List<String> sort, PageSpec page, Class<T> type) {
     this.from = from;
     this.select = select;
     this.where = where;
     this.sort = sort;
     this.page = page;
     this.type = type;
-    this.objectMapper = objectMapper;
   }
 
-  public T map(JsonNode json) {
-    return objectMapper.convertValue(json, type);
+  public static Builder builder(String from, ObjectMapper objectMapper) {
+    return new Builder(from, objectMapper);
+  }
+
+  public Class<T> type() {
+    return type;
   }
 
   @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -97,7 +98,7 @@ public class AgilityQuery<T> {
 
       var selectItems = buildSelectItems(type, introspector, objectMapper);
 
-      return new AgilityQuery<>(from, selectItems, where, sort, page, type, objectMapper);
+      return new AgilityQuery<>(from, selectItems, where, sort, page, type);
     }
   }
 
@@ -107,6 +108,12 @@ public class AgilityQuery<T> {
 
     for (var prop : beanDesc.findProperties()) {
       if (!prop.couldDeserialize()) {
+        continue;
+      }
+
+      // _oid (and any other _-prefixed fields) are always auto-returned by Agility —
+      // explicitly including them in SELECT is unnecessary and may cause API errors.
+      if (prop.getName().startsWith("_")) {
         continue;
       }
 

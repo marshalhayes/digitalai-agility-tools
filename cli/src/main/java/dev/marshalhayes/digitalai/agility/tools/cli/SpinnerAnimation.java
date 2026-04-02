@@ -13,19 +13,17 @@ public class SpinnerAnimation implements AutoCloseable {
   private static final String[] FRAMES = {"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"};
 
   private final Terminal terminal;
-  private final String message;
   private final boolean interactive;
   private volatile boolean running = true;
   private final Thread thread;
 
-  public static SpinnerAnimation start(Terminal terminal, String message) {
-    return new SpinnerAnimation(terminal, message);
+  public static SpinnerAnimation start(Terminal terminal) {
+    return new SpinnerAnimation(terminal);
   }
 
-  private SpinnerAnimation(Terminal terminal, String message) {
+  private SpinnerAnimation(Terminal terminal) {
     this.terminal = terminal;
-    this.message = message;
-    this.interactive = terminal.getInfo().getInteractive();
+    this.interactive = terminal.getTerminalInfo().getOutputInteractive();
 
     if (interactive) {
       terminal.getCursor().hide(true);
@@ -38,7 +36,7 @@ public class SpinnerAnimation implements AutoCloseable {
   private void spin() {
     int i = 0;
     while (running) {
-      terminal.rawPrint("\r" + FRAMES[i++ % FRAMES.length] + " " + message, false);
+      terminal.rawPrint("\r" + FRAMES[i++ % FRAMES.length], false);
       try {
         Thread.sleep(80);
       } catch (InterruptedException e) {
@@ -57,7 +55,7 @@ public class SpinnerAnimation implements AutoCloseable {
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }
-      terminal.rawPrint("\r" + " ".repeat(message.length() + 4) + "\r", false);
+      terminal.rawPrint("\r \r", false);
       terminal.getCursor().show();
     }
   }
