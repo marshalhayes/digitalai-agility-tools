@@ -1,5 +1,6 @@
 package dev.marshalhayes.digitalai.agility.tools;
 
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -12,6 +13,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @AutoConfiguration
 @EnableConfigurationProperties(AgilityClientConfigurationProperties.class)
+@RegisterReflectionForBinding({ AgilityQuery.class, AgilityQuery.PageSpec.class })
 public class AgilityClientAutoConfiguration {
   @Bean
   @Lazy

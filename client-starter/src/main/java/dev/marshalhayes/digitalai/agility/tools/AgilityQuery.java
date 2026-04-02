@@ -12,19 +12,19 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class AgilityQuery {
   @JsonProperty("from")
-  public final String from;
+  private final String from;
 
   @JsonProperty("select")
-  public final List<Object> select;
+  private final List<Object> select;
 
   @JsonProperty("where")
-  public final Map<String, Object> where;
+  private final Map<String, Object> where;
 
   @JsonProperty("sort")
-  public final List<String> sort;
+  private final List<String> sort;
 
   @JsonProperty("page")
-  public PageSpec page;
+  private PageSpec page;
 
   private AgilityQuery(String from, List<Object> select, Map<String, Object> where,
       List<String> sort, PageSpec page) {

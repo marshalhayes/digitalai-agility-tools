@@ -4,7 +4,9 @@ import java.util.concurrent.Callable;
 
 import dev.marshalhayes.digitalai.agility.tools.AgilityQueryClient;
 import dev.marshalhayes.digitalai.agility.tools.cli.HelpMixin;
+import dev.marshalhayes.digitalai.agility.tools.cli.stories.ViewStoryCommand.Story;
 
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +21,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Component
 @Command(name = "view")
+@RegisterReflectionForBinding(Story.class)
 public class ViewStoryCommand implements Callable<Integer> {
   private final ObjectProvider<AgilityQueryClient> queryClientProvider;
 
