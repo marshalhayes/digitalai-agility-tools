@@ -154,6 +154,7 @@ public class AgilityQuery<T> {
     var fields = beanDesc.findProperties()
         .stream()
         .filter(BeanPropertyDefinition::couldDeserialize)
+        .filter(p -> !p.getName().startsWith("_"))
         .map(p -> toField(p, introspector, objectMapper))
         .toList();
 

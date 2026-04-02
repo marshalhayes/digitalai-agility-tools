@@ -74,16 +74,33 @@ class AgilityQueryTest {
     }
 
     @Test
-    void oidFieldsExcludedFromSelect() throws Exception {
+    void oidFieldsExcludedFromTopLevelSelect() throws Exception {
         var query = AgilityQuery.builder("Story", mapper).select(ComplexRecord.class);
         JsonNode root = mapper.readTree(mapper.writeValueAsString(query));
         JsonNode select = root.get("select");
 
-        // Only top-level string items should be checked — _oid on ComplexRecord must be excluded
         for (JsonNode item : select) {
             if (item.isTextual()) {
                 assertThat(item.textValue()).isNotEqualTo("_oid");
                 assertThat(item.textValue()).isNotEqualTo("Oid");
+            }
+        }
+    }
+
+    @Test
+    void oidFieldsExcludedFromSubquerySelect() throws Exception {
+        var query = AgilityQuery.builder("Story", mapper).select(ComplexRecord.class);
+        JsonNode root = mapper.readTree(mapper.writeValueAsString(query));
+        JsonNode select = root.get("select");
+
+        for (JsonNode item : select) {
+            if (item.isObject() && item.has("select")) {
+                item.get("select").forEach(subItem -> {
+                    if (subItem.isTextual()) {
+                        assertThat(subItem.textValue()).isNotEqualTo("_oid");
+                        assertThat(subItem.textValue()).isNotEqualTo("Oid");
+                    }
+                });
             }
         }
     }
