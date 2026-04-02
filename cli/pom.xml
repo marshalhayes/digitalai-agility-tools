@@ -14,9 +14,6 @@
 
   <properties>
     <picocli.version>4.7.7</picocli.version>
-    <jsoup.version>1.22.1</jsoup.version>
-    <mordant.version>3.0.2</mordant.version>
-    <flexmark.version>0.64.8</flexmark.version>
   </properties>
 
   <dependencies>
@@ -29,30 +26,6 @@
     <dependency>
       <groupId>dev.marshalhayes.digitalai.agility.tools</groupId>
       <artifactId>client-starter</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.jsoup</groupId>
-      <artifactId>jsoup</artifactId>
-      <version>${jsoup.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.github.ajalt.mordant</groupId>
-      <artifactId>mordant-jvm</artifactId>
-      <version>${mordant.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.github.ajalt.mordant</groupId>
-      <artifactId>mordant-markdown-jvm</artifactId>
-      <version>${mordant.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.vladsch.flexmark</groupId>
-      <artifactId>flexmark-html2md-converter</artifactId>
-      <version>${flexmark.version}</version>
     </dependency>
 
     <dependency>
@@ -70,7 +43,6 @@
 
         <configuration>
           <annotationProcessorPaths>
-            
             <path>
               <groupId>info.picocli</groupId>
               <artifactId>picocli-codegen</artifactId>
@@ -101,87 +73,7 @@
             </goals>
           </execution>
         </executions>
-
-        <configuration>
-        </configuration>
       </plugin>
     </plugins>
   </build>
-
-  <profiles>
-      <profile>
-      <id>jvm</id>
-      <activation>
-        <activeByDefault>true</activeByDefault>
-      </activation>
-      <dependencies>
-        <dependency>
-          <groupId>com.github.ajalt.mordant</groupId>
-          <artifactId>mordant-jvm-jna</artifactId>
-          <version>${mordant.version}</version>
-        </dependency>
-      </dependencies>
-    </profile>
-
-    <profile>
-      <id>native</id>
-            <dependencies>
-        <dependency>
-          <groupId>com.github.ajalt.mordant</groupId>
-          <artifactId>mordant-jvm-graal-ffi</artifactId>
-          <version>${mordant.version}</version>
-        </dependency>
-        <!-- Override mordant-jvm to exclude JNA (not compatible with native image) -->
-        <dependency>
-          <groupId>com.github.ajalt.mordant</groupId>
-          <artifactId>mordant-jvm</artifactId>
-          <version>${mordant.version}</version>
-          <exclusions>
-            <exclusion>
-              <groupId>com.github.ajalt.mordant</groupId>
-              <artifactId>mordant-jvm-jna-jvm</artifactId>
-            </exclusion>
-            <exclusion>
-              <groupId>com.github.ajalt.mordant</groupId>
-              <artifactId>mordant-jvm-ffm-jvm</artifactId>
-            </exclusion>
-          </exclusions>
-        </dependency>
-      </dependencies>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>org.graalvm.buildtools</groupId>
-            <artifactId>native-maven-plugin</artifactId>
-            <executions>
-              <execution>
-                <id>build-native</id>
-                <goals>
-                  <goal>compile-no-fork</goal>
-                </goals>
-                <phase>package</phase>
-              </execution>
-
-              <!-- Run native tests -->
-              <execution>
-                <id>test-native</id>
-                <goals>
-                  <goal>test</goal>
-                </goals>
-                <phase>test</phase>
-              </execution>
-            </executions>
-
-            <configuration>
-              <mainClass>dev.marshalhayes.digitalai.agility.tools.cli.App</mainClass>
-              <imageName>agility</imageName>
-              <buildArgs>
-                <buildArg>--initialize-at-build-time=com.vladsch.flexmark</buildArg>
-              </buildArgs>
-            </configuration>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-  </profiles>
 </project>
