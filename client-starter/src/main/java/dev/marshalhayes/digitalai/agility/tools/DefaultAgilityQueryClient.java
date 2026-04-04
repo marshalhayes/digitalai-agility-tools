@@ -21,11 +21,6 @@ public class DefaultAgilityQueryClient implements AgilityQueryClient {
   }
 
   @Override
-  public AgilityQuery.Builder from(String assetType) {
-    return AgilityQuery.builder(assetType);
-  }
-
-  @Override
   public <T> List<T> query(AgilityQuery query, Class<T> type) {
     var queryJson = objectMapper.writeValueAsString(query);
 

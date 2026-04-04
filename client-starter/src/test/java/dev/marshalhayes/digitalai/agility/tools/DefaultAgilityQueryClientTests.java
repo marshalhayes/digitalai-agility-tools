@@ -38,16 +38,17 @@ class DefaultAgilityQueryClientTests {
     server.expect(requestTo("http://localhost/query.v1"))
         .andExpect(method(HttpMethod.POST))
         .andRespond(withSuccess(
-          """
+            """
                 [[{"Number":"S-1001","Name":"Test Story"}]]
                   """,
-                MediaType.APPLICATION_JSON));
+            MediaType.APPLICATION_JSON));
 
-    var query = AgilityQuery.builder("Story")
-      .select("Number", "Name");
+    var query = AgilityQuery.builder()
+        .from("Story")
+        .select("Number", "Name");
 
     var results = assertThat(client.query(query, Story.class))
-      .isNotNull()
+        .isNotNull()
         .actual();
 
     assertThat(results)
