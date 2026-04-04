@@ -4,6 +4,4 @@ import java.util.List;
 
 public interface AgilityQueryClient {
   <T> List<T> query(AgilityQuery query, Class<T> type);
-
-  AgilityQuery.Builder from(String assetType);
 }

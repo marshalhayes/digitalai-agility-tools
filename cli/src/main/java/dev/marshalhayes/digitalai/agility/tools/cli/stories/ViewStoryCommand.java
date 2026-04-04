@@ -1,9 +1,11 @@
 package dev.marshalhayes.digitalai.agility.tools.cli.stories;
 
 import java.util.concurrent.Callable;
-
+import dev.marshalhayes.digitalai.agility.tools.AgilityQuery;
 import dev.marshalhayes.digitalai.agility.tools.AgilityQueryClient;
-import dev.marshalhayes.digitalai.agility.tools.cli.HelpMixin;
+import dev.marshalhayes.digitalai.agility.tools.cli.HtmlConverter;
+import dev.marshalhayes.digitalai.agility.tools.cli.Spinner;
+import dev.marshalhayes.digitalai.agility.tools.cli.mixins.HelpMixin;
 import dev.marshalhayes.digitalai.agility.tools.cli.stories.ViewStoryCommand.Story;
 
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
@@ -17,15 +19,13 @@ import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
-import tools.jackson.databind.ObjectMapper;
+import picocli.CommandLine.Help.Ansi;
 
 @Component
 @Command(name = "view")
 @RegisterReflectionForBinding(Story.class)
 public class ViewStoryCommand implements Callable<Integer> {
   private final ObjectProvider<AgilityQueryClient> queryClientProvider;
-
-  private final ObjectMapper objectMapper;
 
   @Mixin
   private HelpMixin helpMixin;
@@ -36,20 +36,21 @@ public class ViewStoryCommand implements Callable<Integer> {
   @Spec
   private CommandSpec spec;
 
-  public ViewStoryCommand(ObjectProvider<AgilityQueryClient> queryClientProvider, ObjectMapper objectMapper) {
+  public ViewStoryCommand(ObjectProvider<AgilityQueryClient> queryClientProvider) {
     this.queryClientProvider = queryClientProvider;
-    this.objectMapper = objectMapper;
   }
 
   @Override
   public Integer call() throws Exception {
     var queryClient = queryClientProvider.getObject();
 
-    var query = queryClient.from("Story")
+    var query = AgilityQuery.builder()
+        .from("Story")
         .where("Number", storyNumber)
         .select("Number", "Name", "Description");
 
-    var stories = queryClient.query(query, Story.class);
+    var stories = Spinner.execute(spec.commandLine().getErr(),
+        () -> queryClient.query(query, Story.class));
 
     if (stories.isEmpty()) {
       spec.commandLine().getErr()
@@ -58,9 +59,16 @@ public class ViewStoryCommand implements Callable<Integer> {
       return 1;
     }
 
-    // Write the story as pretty-printed JSON to the console
-    objectMapper.writerWithDefaultPrettyPrinter()
-        .writeValue(spec.commandLine().getOut(), stories.get(0));
+    var story = stories.getFirst();
+
+    var markdownDescription = HtmlConverter.convert(story.description());
+
+    var storyDetails = """
+        @|bold %s|@ - %s
+
+        %s""".formatted(story.number(), story.name(), markdownDescription);
+
+    spec.commandLine().getOut().println(Ansi.AUTO.string(storyDetails));
 
     return 0;
   }

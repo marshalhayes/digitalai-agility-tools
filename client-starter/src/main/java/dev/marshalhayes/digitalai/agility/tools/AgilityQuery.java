@@ -35,8 +35,8 @@ public class AgilityQuery {
     this.page = page;
   }
 
-  public static Builder builder(String from) {
-    return new Builder(from);
+  public static Builder builder() {
+    return new Builder();
   }
 
   public static Map<String, Object> subquery(String relation, String... fields) {
@@ -50,13 +50,15 @@ public class AgilityQuery {
   }
 
   public static class Builder {
-    private final String from;
+    private String from;
     private final Map<String, Object> where = new LinkedHashMap<>();
     private final List<String> sort = new ArrayList<>();
     private PageSpec page;
 
-    Builder(String from) {
+    public Builder from(String from) {
       this.from = from;
+
+      return this;
     }
 
     public Builder where(String attribute, Object value) {
