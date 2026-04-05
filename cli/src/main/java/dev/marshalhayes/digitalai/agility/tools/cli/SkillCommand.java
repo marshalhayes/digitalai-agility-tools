@@ -24,7 +24,7 @@ public class SkillCommand implements Callable<Integer> {
   static class Hints implements RuntimeHintsRegistrar {
     @Override
     public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-      hints.resources().registerResource(new ClassPathResource(SKILL_MD));
+      hints.resources().registerResource(new ClassPathResource(SKILL_MD, classLoader));
     }
   }
 
@@ -36,7 +36,7 @@ public class SkillCommand implements Callable<Integer> {
 
   @Override
   public Integer call() {
-    var resource = new ClassPathResource(SKILL_MD);
+    var resource = new ClassPathResource(SKILL_MD, SkillCommand.class.getClassLoader());
     try {
       var content = resource.getContentAsString(StandardCharsets.UTF_8);
       var out = spec.commandLine().getOut();
