@@ -2,11 +2,15 @@ package dev.marshalhayes.digitalai.agility.tools;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
+
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 public class DefaultAgilityQueryClient implements AgilityQueryClient {
@@ -21,7 +25,16 @@ public class DefaultAgilityQueryClient implements AgilityQueryClient {
   }
 
   @Override
+  public <T> List<T> query(AgilityQuery query, TypeReference<T> type) {
+    return parseResults(post(query), asset -> objectMapper.convertValue(asset, type));
+  }
+
+  @Override
   public <T> List<T> query(AgilityQuery query, Class<T> type) {
+    return parseResults(post(query), asset -> objectMapper.convertValue(asset, type));
+  }
+
+  private String post(AgilityQuery query) {
     var queryJson = objectMapper.writeValueAsString(query);
 
     log.debug("Sending query to /query.v1: {}", queryJson);
@@ -36,6 +49,10 @@ public class DefaultAgilityQueryClient implements AgilityQueryClient {
 
     log.debug("Response from /query.v1: {}", response);
 
+    return response;
+  }
+
+  private <T> List<T> parseResults(String response, Function<JsonNode, T> converter) {
     var root = objectMapper.readTree(response);
     var resultSet = (!root.isEmpty() && root.get(0) != null) ? root.get(0) : objectMapper.createArrayNode();
 
@@ -46,7 +63,7 @@ public class DefaultAgilityQueryClient implements AgilityQueryClient {
     var results = new ArrayList<T>(resultSet.size());
 
     for (var asset : resultSet) {
-      results.add(objectMapper.convertValue(asset, type));
+      results.add(converter.apply(asset));
     }
 
     return List.copyOf(results);

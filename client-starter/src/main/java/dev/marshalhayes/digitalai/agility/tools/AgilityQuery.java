@@ -51,12 +51,19 @@ public class AgilityQuery {
 
   public static class Builder {
     private String from;
+    private List<Object> select = List.of();
     private final Map<String, Object> where = new LinkedHashMap<>();
     private final List<String> sort = new ArrayList<>();
     private PageSpec page;
 
     public Builder from(String from) {
       this.from = from;
+
+      return this;
+    }
+
+    public Builder select(Object... fields) {
+      this.select = List.of(fields);
 
       return this;
     }
@@ -79,8 +86,8 @@ public class AgilityQuery {
       return this;
     }
 
-    public AgilityQuery select(Object... fields) {
-      return new AgilityQuery(from, List.of(fields), where, sort, page);
+    public AgilityQuery build() {
+      return new AgilityQuery(from, select, where, sort, page);
     }
   }
 }
