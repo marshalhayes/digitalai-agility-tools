@@ -29,9 +29,15 @@ public class Spinner implements AutoCloseable {
   }
 
   @Override
-  public void close() throws InterruptedException {
+  public void close() {
     thread.interrupt();
-    thread.join();
+
+    try {
+      thread.join();
+    } catch (InterruptedException ignored) {
+      Thread.currentThread().interrupt();
+    }
+
     out.print("\r \r");
     out.flush();
   }
