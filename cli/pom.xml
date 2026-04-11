@@ -14,6 +14,7 @@
 
   <properties>
     <picocli.version>4.7.7</picocli.version>
+    <flexmark.version>0.64.8</flexmark.version>
   </properties>
 
   <dependencies>
@@ -21,6 +22,12 @@
       <groupId>info.picocli</groupId>
       <artifactId>picocli-spring-boot-starter</artifactId>
       <version>${picocli.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.vladsch.flexmark</groupId>
+      <artifactId>flexmark-html2md-converter</artifactId>
+      <version>${flexmark.version}</version>
     </dependency>
 
     <dependency>
@@ -107,6 +114,10 @@
             <configuration>
               <mainClass>dev.marshalhayes.digitalai.agility.tools.cli.App</mainClass>
               <imageName>agility</imageName>
+              <buildArgs>
+                <!-- flexmark uses static initializers that must run at build time -->
+                <buildArg>--initialize-at-build-time=com.vladsch.flexmark</buildArg>
+              </buildArgs>
             </configuration>
           </plugin>
         </plugins>

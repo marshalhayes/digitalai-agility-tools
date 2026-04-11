@@ -2,8 +2,10 @@ package dev.marshalhayes.digitalai.agility.tools;
 
 import java.util.List;
 
-public interface AgilityQueryClient {
-  <T> List<T> query(AgilityQuery query, Class<T> type);
+import tools.jackson.core.type.TypeReference;
 
-  AgilityQuery.Builder from(String assetType);
+public interface AgilityQueryClient {
+  <T> List<T> query(AgilityQuery query, TypeReference<T> type);
+
+  <T> List<T> query(AgilityQuery query, Class<T> type);
 }

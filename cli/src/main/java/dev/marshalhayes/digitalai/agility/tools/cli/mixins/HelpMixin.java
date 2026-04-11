@@ -1,4 +1,4 @@
-package dev.marshalhayes.digitalai.agility.tools.cli;
+package dev.marshalhayes.digitalai.agility.tools.cli.mixins;
 
 import picocli.CommandLine.Option;
 

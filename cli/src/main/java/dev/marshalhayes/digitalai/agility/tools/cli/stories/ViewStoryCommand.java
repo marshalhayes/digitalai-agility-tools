@@ -1,34 +1,38 @@
 package dev.marshalhayes.digitalai.agility.tools.cli.stories;
 
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 
-import dev.marshalhayes.digitalai.agility.tools.AgilityQueryClient;
-import dev.marshalhayes.digitalai.agility.tools.cli.HelpMixin;
-import dev.marshalhayes.digitalai.agility.tools.cli.stories.ViewStoryCommand.Story;
-
-import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
+import dev.marshalhayes.digitalai.agility.tools.AgilityQuery;
+import dev.marshalhayes.digitalai.agility.tools.AgilityQueryClient;
+import dev.marshalhayes.digitalai.agility.tools.cli.HtmlConverter;
+import dev.marshalhayes.digitalai.agility.tools.cli.Spinner;
+import dev.marshalhayes.digitalai.agility.tools.cli.mixins.HelpMixin;
+import dev.marshalhayes.digitalai.agility.tools.cli.mixins.JsonOutputMixin;
+import tools.jackson.core.type.TypeReference;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
-import tools.jackson.databind.ObjectMapper;
 
 @Component
 @Command(name = "view")
-@RegisterReflectionForBinding(Story.class)
 public class ViewStoryCommand implements Callable<Integer> {
-  private final ObjectProvider<AgilityQueryClient> queryClientProvider;
+  private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
+  };
 
-  private final ObjectMapper objectMapper;
+  private final ObjectProvider<AgilityQueryClient> queryClientProvider;
 
   @Mixin
   private HelpMixin helpMixin;
+
+  @Mixin
+  private JsonOutputMixin jsonOutput;
 
   @Parameters
   private String storyNumber;
@@ -36,38 +40,60 @@ public class ViewStoryCommand implements Callable<Integer> {
   @Spec
   private CommandSpec spec;
 
-  public ViewStoryCommand(ObjectProvider<AgilityQueryClient> queryClientProvider, ObjectMapper objectMapper) {
+  public ViewStoryCommand(ObjectProvider<AgilityQueryClient> queryClientProvider) {
     this.queryClientProvider = queryClientProvider;
-    this.objectMapper = objectMapper;
   }
 
   @Override
   public Integer call() throws Exception {
-    var queryClient = queryClientProvider.getObject();
+    var story = fetchStory(jsonOutput.fieldsOrElse("Number", "Name", "Description"));
 
-    var query = queryClient.from("Story")
-        .where("Number", storyNumber)
-        .select("Number", "Name", "Description");
-
-    var stories = queryClient.query(query, Story.class);
-
-    if (stories.isEmpty()) {
+    if (story.isEmpty()) {
       spec.commandLine().getErr()
           .println("Story with number %s could not be found".formatted(storyNumber));
 
       return 1;
     }
 
-    // Write the story as pretty-printed JSON to the console
-    objectMapper.writerWithDefaultPrettyPrinter()
-        .writeValue(spec.commandLine().getOut(), stories.get(0));
+    if (jsonOutput.isRequested()) {
+      jsonOutput.printJson(story.getFirst());
+    } else {
+      printFormatted(story.getFirst());
+    }
 
     return 0;
   }
 
-  public record Story(
-      @JsonProperty("Number") String number,
-      @JsonProperty("Name") String name,
-      @JsonProperty("Description") String description) {
+  private void printFormatted(Map<String, Object> story) {
+    spec.commandLine().getOut()
+        .println(toMarkdown(story));
+  }
+
+  static String toMarkdown(Map<String, Object> story) {
+    var title = "**%s** - %s".formatted(stringField(story, "Number"), stringField(story, "Name"));
+    var description = HtmlConverter.convert(stringField(story, "Description")).strip();
+
+    if (description.isEmpty()) {
+      return title;
+    }
+
+    return title + "\n\n" + description;
+  }
+
+  private static String stringField(Map<String, Object> story, String field) {
+    return story.get(field) instanceof String text ? text : "";
+  }
+
+  private List<Map<String, Object>> fetchStory(Object... fields) throws Exception {
+    var queryClient = queryClientProvider.getObject();
+
+    var query = AgilityQuery.builder()
+        .from("Story")
+        .where("Number", storyNumber)
+        .select(fields)
+        .build();
+
+    return Spinner.execute(spec.commandLine().getErr(),
+        () -> queryClient.query(query, MAP_TYPE));
   }
 }

@@ -9,6 +9,8 @@ import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
+
+import dev.marshalhayes.digitalai.agility.tools.cli.mixins.HelpMixin;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Model.CommandSpec;
@@ -37,6 +39,7 @@ public class SkillCommand implements Callable<Integer> {
   @Override
   public Integer call() {
     var resource = new ClassPathResource(SKILL_MD, SkillCommand.class.getClassLoader());
+    
     try {
       var content = resource.getContentAsString(StandardCharsets.UTF_8);
       var out = spec.commandLine().getOut();
