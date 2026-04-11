@@ -114,6 +114,10 @@
             <configuration>
               <mainClass>dev.marshalhayes.digitalai.agility.tools.cli.App</mainClass>
               <imageName>agility</imageName>
+              <buildArgs>
+                <!-- flexmark uses static initializers that must run at build time -->
+                <buildArg>--initialize-at-build-time=com.vladsch.flexmark</buildArg>
+              </buildArgs>
             </configuration>
           </plugin>
         </plugins>

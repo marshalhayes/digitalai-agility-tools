@@ -16,6 +16,10 @@ public final class HtmlConverter {
   }
 
   public static String convert(String html) {
+    if (html == null || html.isBlank()) {
+      return "";
+    }
+
     return CONVERTER.convert(html, -1);
   }
 }

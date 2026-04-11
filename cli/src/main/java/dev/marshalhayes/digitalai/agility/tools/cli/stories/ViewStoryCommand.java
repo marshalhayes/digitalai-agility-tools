@@ -15,7 +15,6 @@ import dev.marshalhayes.digitalai.agility.tools.cli.mixins.HelpMixin;
 import dev.marshalhayes.digitalai.agility.tools.cli.mixins.JsonOutputMixin;
 import tools.jackson.core.type.TypeReference;
 import picocli.CommandLine.Command;
-import picocli.CommandLine.Help.Ansi;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Parameters;
@@ -66,13 +65,23 @@ public class ViewStoryCommand implements Callable<Integer> {
   }
 
   private void printFormatted(Map<String, Object> story) {
-    var description = HtmlConverter.convert((String) story.get("Description"));
-
     spec.commandLine().getOut()
-        .println(Ansi.AUTO.string("""
-            @|bold %s|@ - %s
+        .println(toMarkdown(story));
+  }
 
-            %s""".formatted(story.get("Number"), story.get("Name"), description)));
+  static String toMarkdown(Map<String, Object> story) {
+    var title = "**%s** - %s".formatted(stringField(story, "Number"), stringField(story, "Name"));
+    var description = HtmlConverter.convert(stringField(story, "Description")).strip();
+
+    if (description.isEmpty()) {
+      return title;
+    }
+
+    return title + "\n\n" + description;
+  }
+
+  private static String stringField(Map<String, Object> story, String field) {
+    return story.get(field) instanceof String text ? text : "";
   }
 
   private List<Map<String, Object>> fetchStory(Object... fields) throws Exception {
