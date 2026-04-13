@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: nightly-release
+  cancel-in-progress: false
+
 jobs:
   prepare:
     name: Prepare
@@ -23,9 +27,8 @@ jobs:
         id: check
         run: |
           repo="${{ github.repository }}"
-          default_branch="${{ github.event.repository.default_branch }}"
 
-          head_sha=$(gh api "repos/${repo}/branches/${default_branch}" --jq '.commit.sha')
+          head_sha=$(gh api "repos/${repo}/branches/main" --jq '.commit.sha')
           echo "ref=${head_sha}" >> "$GITHUB_OUTPUT"
 
           nightly_sha=$(gh api "repos/${repo}/git/ref/tags/nightly" --jq '.object.sha' 2>/dev/null || echo "")
@@ -82,17 +85,30 @@ jobs:
           pattern: agility-*
 
       - name: Prepare release assets
+        shell: bash
         run: |
+          set -euo pipefail
+          shopt -s nullglob
+
           mkdir -p release-assets
 
-          for artifact_dir in dist/agility-*/; do
-            platform=${artifact_dir#dist/agility-}
-            platform=${platform%/}
+          artifact_dirs=(dist/agility-*)
 
-            if [[ -f "${artifact_dir}agility.exe" ]]; then
-              cp "${artifact_dir}agility.exe" "release-assets/agility-${platform}.exe"
+          if [[ ${#artifact_dirs[@]} -eq 0 ]]; then
+            echo "::error::No CLI artifacts were downloaded."
+            exit 1
+          fi
+
+          for artifact_dir in "${artifact_dirs[@]}"; do
+            platform=${artifact_dir#dist/agility-}
+
+            if [[ -f "$artifact_dir/agility.exe" ]]; then
+              cp "$artifact_dir/agility.exe" "release-assets/agility-${platform}.exe"
+            elif [[ -f "$artifact_dir/agility" ]]; then
+              cp "$artifact_dir/agility" "release-assets/agility-${platform}"
             else
-              cp "${artifact_dir}agility" "release-assets/agility-${platform}"
+              echo "::error::No CLI binary found in $artifact_dir"
+              exit 1
             fi
           done
 
@@ -104,13 +120,13 @@ jobs:
           ref="${{ needs.prepare.outputs.ref }}"
           short_ref="${ref:0:7}"
 
-          cat > release-notes.md << EOF
-          **Nightly build** from commit [\`${short_ref}\`](../../commit/${ref})
+          cat > release-notes.md <<-EOF
+          	**Nightly build** from commit [\`${short_ref}\`](../../commit/${ref})
 
-          Built with version \`${version}\`.
+          	Built with version \`${version}\`.
 
-          > ⚠️ This is an automated nightly build from \`main\` and may be unstable.
-          EOF
+          	> ⚠️ This is an automated nightly build from \`main\` and may be unstable.
+          	EOF
 
       - name: Publish release
         run: |
