@@ -1,0 +1,157 @@
+name: Nightly Release
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+      ref: ${{ steps.check.outputs.ref }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Resolve HEAD
+        id: check
+        run: |
+          repo="${{ github.repository }}"
+
+          head_sha=$(gh api "repos/${repo}/branches/main" --jq '.commit.sha')
+          echo "ref=${head_sha}" >> "$GITHUB_OUTPUT"
+
+          nightly_sha=$(gh api "repos/${repo}/git/ref/tags/nightly" --jq '.object.sha' 2>/dev/null || echo "")
+
+          if [[ "$head_sha" == "$nightly_sha" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Nightly tag already points to HEAD ($head_sha), skipping build."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out main
+        if: ${{ steps.check.outputs.skip != 'true' }}
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.check.outputs.ref }}
+
+      - name: Set up JDK 25
+        if: ${{ steps.check.outputs.skip != 'true' }}
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: graalvm
+          cache: maven
+
+      - name: Compute nightly version
+        id: version
+        if: ${{ steps.check.outputs.skip != 'true' }}
+        run: |
+          base_version=$(./mvnw -B -q help:evaluate -Dexpression=project.version -DforceStdout)
+          short_sha=$(git rev-parse --short HEAD)
+          echo "version=${base_version}-nightly+${short_sha}" >> "$GITHUB_OUTPUT"
+
+  build-cli:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.skip != 'true' }}
+    uses: ./.github/workflows/build-cli.yml
+    with:
+      ref: ${{ needs.prepare.outputs.ref }}
+      release-version: ${{ needs.prepare.outputs.version }}
+
+  publish-nightly:
+    name: Publish
+    needs: [prepare, build-cli]
+    if: ${{ needs.prepare.outputs.skip != 'true' }}
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download CLI native artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: agility-*
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          mkdir -p release-assets
+
+          artifact_dirs=(dist/agility-*)
+
+          if [[ ${#artifact_dirs[@]} -eq 0 ]]; then
+            echo "::error::No CLI artifacts were downloaded."
+            exit 1
+          fi
+
+          for artifact_dir in "${artifact_dirs[@]}"; do
+            platform=${artifact_dir#dist/agility-}
+
+            if [[ -f "$artifact_dir/agility.exe" ]]; then
+              cp "$artifact_dir/agility.exe" "release-assets/agility-${platform}.exe"
+            elif [[ -f "$artifact_dir/agility" ]]; then
+              cp "$artifact_dir/agility" "release-assets/agility-${platform}"
+            else
+              echo "::error::No CLI binary found in $artifact_dir"
+              exit 1
+            fi
+          done
+
+          ls -1 release-assets
+
+      - name: Write release notes
+        run: |
+          version="${{ needs.prepare.outputs.version }}"
+          ref="${{ needs.prepare.outputs.ref }}"
+          short_ref="${ref:0:7}"
+
+          cat > release-notes.md <<-EOF
+          	**Nightly build** from commit [\`${short_ref}\`](../../commit/${ref})
+
+          	Built with version \`${version}\`.
+
+          	> ⚠️ This is an automated nightly build from \`main\` and may be unstable.
+          	EOF
+
+      - name: Publish release
+        run: |
+          if gh release view nightly >/dev/null 2>&1; then
+            gh release edit nightly \
+              --title "Nightly" \
+              --notes-file release-notes.md \
+              --prerelease
+            gh release upload nightly release-assets/* --clobber
+          else
+            gh release create nightly release-assets/* \
+              --title "Nightly" \
+              --notes-file release-notes.md \
+              --prerelease
+          fi
+
+      - name: Update tag
+        run: |
+          repo="${{ github.repository }}"
+          ref="${{ needs.prepare.outputs.ref }}"
+
+          gh api --method PATCH \
+            "repos/${repo}/git/refs/tags/nightly" \
+            -f sha="${ref}" \
+          || gh api --method POST \
+            "repos/${repo}/git/refs" \
+            -f ref=refs/tags/nightly \
+            -f sha="${ref}"
