@@ -77,6 +77,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Download CLI native artifacts
         uses: actions/download-artifact@v8
