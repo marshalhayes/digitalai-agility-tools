@@ -79,41 +79,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - name: Download CLI native artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: dist
-          pattern: agility-*
-
       - name: Prepare release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-
-          mkdir -p release-assets
-
-          artifact_dirs=(dist/agility-*)
-
-          if [[ ${#artifact_dirs[@]} -eq 0 ]]; then
-            echo "::error::No CLI artifacts were downloaded."
-            exit 1
-          fi
-
-          for artifact_dir in "${artifact_dirs[@]}"; do
-            platform=${artifact_dir#dist/agility-}
-
-            if [[ -f "$artifact_dir/agility.exe" ]]; then
-              cp "$artifact_dir/agility.exe" "release-assets/agility-${platform}.exe"
-            elif [[ -f "$artifact_dir/agility" ]]; then
-              cp "$artifact_dir/agility" "release-assets/agility-${platform}"
-            else
-              echo "::error::No CLI binary found in $artifact_dir"
-              exit 1
-            fi
-          done
-
-          ls -1 release-assets
+        uses: ./.github/actions/prepare-release-assets
 
       - name: Write release notes
         run: |
@@ -129,6 +96,19 @@ jobs:
           	> ⚠️ This is an automated nightly build from \`main\` and may be unstable.
           	EOF
 
+      - name: Update tag
+        run: |
+          repo="${{ github.repository }}"
+          ref="${{ needs.prepare.outputs.ref }}"
+
+          gh api --method PATCH \
+            "repos/${repo}/git/refs/tags/nightly" \
+            -f sha="${ref}" \
+          || gh api --method POST \
+            "repos/${repo}/git/refs" \
+            -f ref=refs/tags/nightly \
+            -f sha="${ref}"
+
       - name: Publish release
         run: |
           if gh release view nightly >/dev/null 2>&1; then
@@ -143,16 +123,3 @@ jobs:
               --notes-file release-notes.md \
               --prerelease
           fi
-
-      - name: Update tag
-        run: |
-          repo="${{ github.repository }}"
-          ref="${{ needs.prepare.outputs.ref }}"
-
-          gh api --method PATCH \
-            "repos/${repo}/git/refs/tags/nightly" \
-            -f sha="${ref}" \
-          || gh api --method POST \
-            "repos/${repo}/git/refs" \
-            -f ref=refs/tags/nightly \
-            -f sha="${ref}"

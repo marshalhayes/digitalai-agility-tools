@@ -1,0 +1,41 @@
+name: Prepare Release Assets
+description: Downloads CLI native artifacts and packages them as .tar.gz or .zip archives
+
+runs:
+  using: composite
+  steps:
+    - name: Download CLI native artifacts
+      uses: actions/download-artifact@v8
+      with:
+        path: dist
+        pattern: agility-*
+
+    - name: Package release assets
+      shell: bash
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+
+        mkdir -p release-assets
+
+        artifact_dirs=(dist/agility-*)
+
+        if [[ ${#artifact_dirs[@]} -eq 0 ]]; then
+          echo "::error::No CLI artifacts were downloaded."
+          exit 1
+        fi
+
+        for artifact_dir in "${artifact_dirs[@]}"; do
+          platform=${artifact_dir#dist/agility-}
+
+          if [[ -f "$artifact_dir/agility.exe" ]]; then
+            (cd "$artifact_dir" && zip -j "${GITHUB_WORKSPACE}/release-assets/agility-${platform}.zip" agility.exe)
+          elif [[ -f "$artifact_dir/agility" ]]; then
+            tar -czf "release-assets/agility-${platform}.tar.gz" --owner=0 --group=0 -C "$artifact_dir" agility
+          else
+            echo "::error::No CLI binary found in $artifact_dir"
+            exit 1
+          fi
+        done
+
+        ls -1 release-assets

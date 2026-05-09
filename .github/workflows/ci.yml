@@ -7,7 +7,7 @@ on:
   pull_request:
     branches:
       - main
-      - 'release/**'
+      - "release/**"
     types:
       - opened
       - reopened
@@ -19,6 +19,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-cli:
+  build:
     if: ${{ !github.event.pull_request.draft || github.event_name == 'push' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: graalvm
+          cache: maven
+
+      - name: Build and test
+        shell: bash
+        run: ./mvnw -B -pl cli -am test
+
+  build-native:
+    needs: build
     uses: ./.github/workflows/build-cli.yml
+    with:
+      retention-days: 7
