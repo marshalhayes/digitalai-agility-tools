@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: ""
+      retention-days:
+        description: Artifact retention period in days.
+        required: false
+        type: number
+        default: 30
 
 jobs:
   build-cli:
@@ -37,7 +42,7 @@ jobs:
             artifact: cli/target/agility
 
           - name: windows-x64
-            runner: windows-2025
+            runner: windows-2025-vs2026
             artifact: cli/target/agility.exe
 
           - name: macos-arm64
@@ -56,10 +61,9 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Install musl toolchain
-        if: matrix.name == 'linux-x64-musl'
+        if: ${{ matrix.name == 'linux-x64-musl' }}
         shell: bash
         run: |
-          set -euo pipefail
           curl -fsSL -o musl-toolchain.tar.gz https://gds.oracle.com/download/bfs/archive/musl-toolchain-1.2.5-oracle-00001-linux-amd64.tar.gz
           tar -xzf musl-toolchain.tar.gz
           echo "$PWD/musl-toolchain/bin" >> "$GITHUB_PATH"
@@ -74,9 +78,7 @@ jobs:
       - name: Set CLI release version
         if: ${{ inputs.release-version != '' }}
         shell: bash
-        run: |
-          set -euo pipefail
-          ./mvnw -B versions:set "-DnewVersion=${{ inputs.release-version }}" -DgenerateBackupPoms=false -DprocessAllModules=true
+        run: ./mvnw -B versions:set "-DnewVersion=${{ inputs.release-version }}" -DgenerateBackupPoms=false -DprocessAllModules=true
 
       - name: Build CLI native image
         shell: bash
@@ -87,3 +89,4 @@ jobs:
         with:
           name: agility-${{ matrix.name }}
           path: ${{ matrix.artifact }}
+          retention-days: ${{ inputs.retention-days }}

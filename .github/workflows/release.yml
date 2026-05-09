@@ -20,6 +20,8 @@ jobs:
     name: Validate CLI release inputs
     timeout-minutes: 5
     runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
     outputs:
       is_prerelease: ${{ steps.release-inputs.outputs.is_prerelease }}
       release_sha: ${{ steps.release-source.outputs.release_sha }}
@@ -46,17 +48,14 @@ jobs:
             exit 1
           fi
 
-      - name: Check out release branch
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.release-branch }}
-
       - name: Resolve CLI release source
         id: release-source
         shell: bash
         run: |
           set -euo pipefail
-          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          branch='${{ inputs.release-branch }}'
+          sha=$(gh api "repos/${{ github.repository }}/git/ref/heads/${branch}" --jq '.object.sha')
+          echo "release_sha=${sha}" >> "$GITHUB_OUTPUT"
 
   build-cli:
     needs: validate
@@ -78,41 +77,8 @@ jobs:
         with:
           ref: ${{ needs.validate.outputs.release_sha }}
 
-      - name: Download CLI native artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: dist
-          pattern: agility-*
-
       - name: Prepare CLI release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-
-          mkdir -p release-assets
-
-          artifact_dirs=(dist/agility-*)
-
-          if [[ ${#artifact_dirs[@]} -eq 0 ]]; then
-            echo "::error::No CLI artifacts were downloaded."
-            exit 1
-          fi
-
-          for artifact_dir in "${artifact_dirs[@]}"; do
-            platform=${artifact_dir#dist/agility-}
-
-            if [[ -f "$artifact_dir/agility.exe" ]]; then
-              cp "$artifact_dir/agility.exe" "release-assets/agility-${platform}.exe"
-            elif [[ -f "$artifact_dir/agility" ]]; then
-              cp "$artifact_dir/agility" "release-assets/agility-${platform}"
-            else
-              echo "::error::No CLI binary found in $artifact_dir"
-              exit 1
-            fi
-          done
-
-          ls -1 release-assets
+        uses: ./.github/actions/prepare-release-assets
 
       - name: Create or validate CLI release tag
         shell: bash
@@ -145,28 +111,16 @@ jobs:
           set -euo pipefail
 
           tag_name='${{ needs.validate.outputs.release_tag }}'
-          prerelease_json='false'
-
-          if [[ '${{ needs.validate.outputs.is_prerelease }}' == 'true' ]]; then
-            prerelease_json='true'
-          fi
+          prerelease=$([[ '${{ needs.validate.outputs.is_prerelease }}' == 'true' ]] && echo true || echo false)
 
           if gh release view "$tag_name" >/dev/null 2>&1; then
-            release_id=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag_name}" --jq '.id')
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+            release_id=$(gh api "repos/${{ github.repository }}/releases/tags/${tag_name}" --jq '.id')
+            gh api --method PATCH "repos/${{ github.repository }}/releases/${release_id}" \
               --field name="$tag_name" \
-              --field prerelease="$prerelease_json"
+              --field prerelease="$prerelease"
             gh release upload "$tag_name" release-assets/* --clobber
           else
-            create_args=(
-              --verify-tag
-              --generate-notes
-              --title "$tag_name"
-            )
-
-            if [[ "$prerelease_json" == 'true' ]]; then
-              create_args+=(--prerelease)
-            fi
-
+            create_args=(--verify-tag --generate-notes --title "$tag_name")
+            [[ "$prerelease" == 'true' ]] && create_args+=(--prerelease)
             gh release create "$tag_name" release-assets/* "${create_args[@]}"
           fi
