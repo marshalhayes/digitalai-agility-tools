@@ -42,7 +42,7 @@ jobs:
 
       - name: Check out main
         if: ${{ steps.check.outputs.skip != 'true' }}
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.check.outputs.ref }}
 
@@ -80,7 +80,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.ref }}
 
