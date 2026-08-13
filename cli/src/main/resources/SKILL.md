@@ -28,7 +28,7 @@ compatibility: Requires the `agility` binary on PATH and a configured ~/.agility
 agility story view <storyNumber>
 ```
 
-Returns JSON with the story's number, name, and description.
+Returns JSON with the story's number, name, and description by default.
 
 **Example:**
 
@@ -43,6 +43,21 @@ agility story view S-1001
   "Number": "S-1001",
   "Name": "Implement login page",
   "Description": "As a user, I want to log in so that..."
+}
+```
+
+To retrieve only specific fields, pass `--json` with a comma-separated list of field names:
+
+```bash
+agility story view S-1001 --json Name,Number
+```
+
+**Output:**
+
+```json
+{
+  "Name": "Implement login page",
+  "Number": "S-1001"
 }
 ```
 

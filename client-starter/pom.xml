@@ -14,6 +14,12 @@
 
   <dependencies>
     <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+
+    <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-autoconfigure</artifactId>
     </dependency>
@@ -38,14 +44,19 @@
         <configuration>
           <annotationProcessorPaths>
             <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </path>
+
+            <path>
               <groupId>org.springframework.boot</groupId>
               <artifactId>spring-boot-autoconfigure-processor</artifactId>
             </path>
 
             <path>
-							<groupId>org.springframework.boot</groupId>
-							<artifactId>spring-boot-configuration-processor</artifactId>
-						</path>
+			  <groupId>org.springframework.boot</groupId>
+			  <artifactId>spring-boot-configuration-processor</artifactId>
+			</path>
           </annotationProcessorPaths>
         </configuration>
       </plugin>
