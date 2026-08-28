@@ -1,7 +1,5 @@
 package dev.marshalhayes.digitalai.agility.tools.cli.mixins;
 
-import java.util.stream.Stream;
-
 import org.springframework.stereotype.Component;
 
 import picocli.CommandLine.Model.CommandSpec;
@@ -15,7 +13,7 @@ import tools.jackson.databind.ObjectMapper;
 public class JsonOutputMixin {
   private final ObjectMapper objectMapper;
 
-  @Option(names = "--json", arity = "0..1", fallbackValue = "", split = "\\s*,\\s*")
+  @Option(names = "--json", arity = "1..*", split = "\\s*,\\s*")
   private String[] fields;
 
   @Spec(Target.MIXEE)
@@ -30,15 +28,7 @@ public class JsonOutputMixin {
   }
 
   public Object[] fieldsOrElse(Object... defaults) {
-    if (fields == null) {
-      return defaults;
-    }
-
-    var nonBlank = Stream.of(fields)
-        .filter(s -> !s.isBlank())
-        .toArray(String[]::new);
-
-    return nonBlank.length == 0 ? defaults : nonBlank;
+    return fields != null ? fields : defaults;
   }
 
   public void printJson(Object value) throws Exception {

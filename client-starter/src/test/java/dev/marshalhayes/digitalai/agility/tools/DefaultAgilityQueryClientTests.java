@@ -24,7 +24,7 @@ class DefaultAgilityQueryClientTests {
 
   private static final ObjectMapper objectMapper = JsonMapper.builder().build();
   private static final String RESPONSE_JSON = """
-      [[{"Number":"S-1001","Name":"Test Story"}]]
+      [[{"_oid":"Story:1001","Number":"S-1001","Name":"Test Story","Description":"A description","Status.Name":"In Progress"}]]
       """;
 
   @BeforeEach
@@ -78,4 +78,47 @@ class DefaultAgilityQueryClientTests {
   }
 
   record Story(String Number, String Name) {}
+
+  @Test
+  void shouldReturnRelationFieldsWithDotNotationKey() {
+    server.expect(requestTo("http://localhost/query.v1"))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withSuccess(RESPONSE_JSON, MediaType.APPLICATION_JSON));
+
+    var query = AgilityQuery.builder().from("Story").select("Number", "Status.Name").build();
+
+    var results = client.query(query, new TypeReference<Map<String, Object>>() {});
+
+    assertThat(results)
+        .hasSize(1)
+        .first()
+        .satisfies(story -> {
+          assertThat(story).containsOnlyKeys("Number", "Status.Name");
+          assertThat(story.get("Status.Name")).isEqualTo("In Progress");
+        });
+
+    server.verify();
+  }
+
+  @Test
+  void shouldOnlyIncludeSelectedFields() {
+    server.expect(requestTo("http://localhost/query.v1"))
+        .andExpect(method(HttpMethod.POST))
+        .andRespond(withSuccess(RESPONSE_JSON, MediaType.APPLICATION_JSON));
+
+    var query = AgilityQuery.builder().from("Story").select("Number", "Name").build();
+
+    var results = client.query(query, new TypeReference<Map<String, Object>>() {});
+
+    assertThat(results)
+        .hasSize(1)
+        .first()
+        .satisfies(story -> {
+          assertThat(story).containsOnlyKeys("Number", "Name");
+          assertThat(story.get("Number")).isEqualTo("S-1001");
+          assertThat(story.get("Name")).isEqualTo("Test Story");
+        });
+
+    server.verify();
+  }
 }

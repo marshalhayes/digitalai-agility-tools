@@ -12,6 +12,7 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 public class DefaultAgilityQueryClient implements AgilityQueryClient {
   private static final Logger log = LoggerFactory.getLogger(DefaultAgilityQueryClient.class);
@@ -26,12 +27,12 @@ public class DefaultAgilityQueryClient implements AgilityQueryClient {
 
   @Override
   public <T> List<T> query(AgilityQuery query, TypeReference<T> type) {
-    return parseResults(post(query), asset -> objectMapper.convertValue(asset, type));
+    return parseResults(post(query), query.getSelect(), asset -> objectMapper.convertValue(asset, type));
   }
 
   @Override
   public <T> List<T> query(AgilityQuery query, Class<T> type) {
-    return parseResults(post(query), asset -> objectMapper.convertValue(asset, type));
+    return parseResults(post(query), query.getSelect(), asset -> objectMapper.convertValue(asset, type));
   }
 
   private String post(AgilityQuery query) {
@@ -52,7 +53,7 @@ public class DefaultAgilityQueryClient implements AgilityQueryClient {
     return response;
   }
 
-  private <T> List<T> parseResults(String response, Function<JsonNode, T> converter) {
+  private <T> List<T> parseResults(String response, List<Object> selectedFields, Function<JsonNode, T> converter) {
     var root = objectMapper.readTree(response);
     var resultSet = (!root.isEmpty() && root.get(0) != null) ? root.get(0) : objectMapper.createArrayNode();
 
@@ -62,7 +63,15 @@ public class DefaultAgilityQueryClient implements AgilityQueryClient {
 
     var results = new ArrayList<T>(resultSet.size());
 
+    var keepFields = selectedFields.stream()
+        .filter(f -> f instanceof String)
+        .map(Object::toString)
+        .collect(java.util.stream.Collectors.toSet());
+
     for (var asset : resultSet) {
+      if (!keepFields.isEmpty()) {
+        ((ObjectNode) asset).retain(keepFields);
+      }
       results.add(converter.apply(asset));
     }
 
