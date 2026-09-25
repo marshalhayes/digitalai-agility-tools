@@ -14,15 +14,12 @@ import tools.jackson.databind.json.JsonMapper;
 
 class JsonOutputMixinTests {
   @Test
-  void shouldUseDefaultFieldsForBareJsonFlag() {
+  void shouldRequireAtLeastOneFieldWithJsonFlag() {
     var command = new TestCommand();
 
     var exitCode = new CommandLine(command).execute("S-1001", "--json");
 
-    assertThat(exitCode).isZero();
-    assertThat(command.storyNumber).isEqualTo("S-1001");
-    assertThat(command.jsonOutput.isRequested()).isTrue();
-    assertThat(command.jsonOutput.fieldsOrElse("Number")).containsExactly("Number");
+    assertThat(exitCode).isNotZero();
   }
 
   @Test
@@ -37,31 +34,10 @@ class JsonOutputMixinTests {
   }
 
   @Test
-  void shouldIgnoreBlankFieldsFromDoubleComma() {
-    var command = new TestCommand();
-
-    var exitCode = new CommandLine(command).execute("S-1001", "--json=Number,,Name");
-
-    assertThat(exitCode).isZero();
-    assertThat(command.jsonOutput.fieldsOrElse("Description")).containsExactly("Number", "Name");
-  }
-
-  @Test
-  void shouldReturnDefaultsWhenAllFieldsAreBlank() {
-    var command = new TestCommand();
-
-    var exitCode = new CommandLine(command).execute("S-1001", "--json=,,");
-
-    assertThat(exitCode).isZero();
-    assertThat(command.jsonOutput.isRequested()).isTrue();
-    assertThat(command.jsonOutput.fieldsOrElse("Number", "Name")).containsExactly("Number", "Name");
-  }
-
-  @Test
   void shouldParseCommaSeparatedJsonFields() {
     var command = new TestCommand();
 
-    var exitCode = new CommandLine(command).execute("--json=Number,Name", "S-1001");
+    var exitCode = new CommandLine(command).execute("S-1001", "--json=Number,Name");
 
     assertThat(exitCode).isZero();
     assertThat(command.storyNumber).isEqualTo("S-1001");
