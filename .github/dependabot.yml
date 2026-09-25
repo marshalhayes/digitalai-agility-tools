@@ -1,12 +1,19 @@
 version: 2
 
-updates:
-  - package-ecosystem: "maven"
-    directory: "/"
+multi-ecosystem-groups:
+  all-version-updates:
     schedule:
       interval: "weekly"
 
+updates:
+  - package-ecosystem: "maven"
+    directory: "/"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "all-version-updates"
+
   - package-ecosystem: "github-actions"
     directory: "/"
-    schedule:
-      interval: "weekly"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "all-version-updates"
